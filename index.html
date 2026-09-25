@@ -594,7 +594,16 @@ button, .touch-star, .capsule, .dropzone, canvas { touch-action: manipulation; }
     <div class="star-cluster" id="aboutStars">
       <!-- Generated via JS -->
     </div>
-    <div id="aboutRevealText" class="story-text" style="position:absolute; bottom:15%; width:90%; min-height:4em;"></div>
+    <div id="aboutRevealText" class="story-text"
+      style="
+        position:absolute;
+        bottom:1%;
+        width:90%;
+        min-height:4em;
+        z-index:20;
+        pointer-events:none;
+      ">
+    </div>
     <div class="final-star" id="oneLastThingStar">✦</div>
     <button id="btnOneLastThing" style="opacity:0; pointer-events:none; position:absolute; bottom:8%; transition:opacity 1s;">💗 Nói đi</button>
   </section>
@@ -1060,7 +1069,7 @@ function runParticleText(canvas, text, opts = {}){
   if(!canvas) return { skip(){} };
 
   const ctx = canvas.getContext("2d", { alpha: true });
-  const dpr = Math.min(window.devicePixelRatio || 1, 2.25);
+  const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
   const rect = canvas.getBoundingClientRect();
   const w = Math.max(320, Math.round(rect.width || 800));
   const h = Math.max(180, Math.round(rect.height || 300));
@@ -1116,11 +1125,12 @@ function runParticleText(canvas, text, opts = {}){
 
   // V8.6: lấy mẫu dày hơn để nét chữ liền mạch và ít bị rỗ.
   const sampleStep = 2;
+  const alphaThreshold = 96;
   let points = [];
   for(let y = 0; y < h; y += sampleStep){
     for(let x = 0; x < w; x += sampleStep){
       const a = data[(y * w + x) * 4 + 3];
-      if(a > 72) points.push({ x, y, alpha: a / 255 });
+      if(a > alphaThreshold) points.push({ x, y, alpha: Math.min(1, a / 255) });
     }
   }
 
@@ -1141,7 +1151,7 @@ function runParticleText(canvas, text, opts = {}){
       vx: 0,
       vy: 0,
       alpha: point.alpha,
-      size: 1.35 + Math.random() * 0.95,
+      size: 1.05 + Math.random() * 0.70,
       // Hồng đậm + đỏ hồng; tránh vàng/trắng làm chữ bị nhạt.
       hue: warmPink ? 338 + Math.random() * 12 : 350 + Math.random() * 10,
       phase: Math.random() * Math.PI * 2
@@ -1163,36 +1173,40 @@ function runParticleText(canvas, text, opts = {}){
   };
 
   function drawParticle(p, ts){
-    const breathe = 1 + Math.sin(ts * 0.003 + p.phase) * 0.035;
+    const breathe = 1 + Math.sin(ts * 0.003 + p.phase) * 0.02;
     const radius = p.size * breathe;
-    let alpha = Math.min(1, p.alpha * 1.08);
+    let alpha = Math.min(1, p.alpha * 1.16);
 
     if(phase === "form"){
-      alpha = Math.min(1, 0.48 + Math.hypot(p.vx, p.vy) * 0.14);
+      // Khi đang ghép chữ: ưu tiên độ rõ, không để glow lấn vào nét chữ.
+      alpha = Math.min(1, 0.78 + Math.hypot(p.vx, p.vy) * 0.08);
     }else if(phase === "dissolve"){
       alpha = Math.max(0, p.alpha * (1 - (ts - phaseStart) / 1250));
     }
 
-    // Lớp aura mềm.
-    ctx.globalAlpha = alpha * 0.22;
-    ctx.fillStyle = `hsl(${p.hue}, 100%, 68%)`;
+    // Halo cực nhẹ — chỉ tạo độ sống, không làm nhòe nét.
+    const haloAlpha = phase === "form" ? alpha * 0.055 : alpha * 0.10;
+    ctx.globalAlpha = haloAlpha;
+    ctx.fillStyle = `hsl(${p.hue}, 100%, 64%)`;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, radius * 3.0, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, radius * 1.75, 0, Math.PI * 2);
     ctx.fill();
 
-    // Core hồng/đỏ sắc nét.
-    ctx.globalAlpha = Math.min(1, alpha);
-    ctx.fillStyle = `hsl(${p.hue}, 96%, 82%)`;
+    // Core rõ, sáng và đặc hơn.
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = `hsl(${p.hue}, 98%, 73%)`;
     ctx.beginPath();
     ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
     ctx.fill();
 
-    // Tâm sáng nhỏ để chữ có cảm giác mịn thay vì là những ô chấm thô.
-    ctx.globalAlpha = alpha * 0.52;
-    ctx.fillStyle = "#fff3f7";
+    // Highlight rất nhỏ, tránh hiệu ứng trắng làm mất nét chữ.
+    ctx.globalAlpha = alpha * 0.18;
+    ctx.fillStyle = "#fff5f8";
     ctx.beginPath();
-    ctx.arc(p.x, p.y, Math.max(0.55, radius * 0.38), 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, Math.max(0.42, radius * 0.20), 0, Math.PI * 2);
     ctx.fill();
+
+    ctx.globalAlpha = 1;
   }
 
   function frame(ts){
@@ -1200,7 +1214,7 @@ function runParticleText(canvas, text, opts = {}){
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
-    ctx.globalCompositeOperation = "lighter";
+    ctx.globalCompositeOperation = "source-over";
 
     let settled = true;
 
