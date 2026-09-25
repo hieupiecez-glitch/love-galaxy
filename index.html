@@ -1,0 +1,3007 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Love Galaxy V8.6 — QR Share</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,500;1,600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<style>
+:root {
+  --void: #06050e;
+  --nebula: #130d2a;
+  --nebula2: #211343;
+  --rose: #f0a6c8;
+  --rose-glow: rgba(240, 166, 200, 0.4);
+  --gold: #ffd9a0;
+  --gold-glow: rgba(255, 217, 160, 0.5);
+  --ink: #f4f0fb;
+  --dim: #a99fc9;
+  --serif: 'Cormorant Garamond', serif;
+  --sans: 'Inter', system-ui, sans-serif;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+*, *:before, *:after { box-sizing: inherit; margin: 0; padding: 0; }
+html, body {
+  height: 100%;
+  background: var(--void);
+  color: var(--ink);
+  font-family: var(--sans);
+  overflow: hidden;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 1.5s ease;
+}
+body { position: relative; }
+
+/* STATE MODIFIERS */
+body.mood-warm { --void: #1a0f14; --nebula: #2a1520; }
+body.mood-cool { --void: #0b101e; --nebula: #151b30; }
+
+/* CANVAS BACKGROUNDS */
+#bgcanvas, #fxCanvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+#bgcanvas { z-index: 0; }
+#fxCanvas { z-index: 30; }
+
+.stage { position: relative; z-index: 1; height: 100%; width: 100%; overflow: hidden; }
+
+/* SCREENS */
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.4rem;
+  padding: 2rem 1.4rem;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(18px) scale(0.98);
+  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.screen.active {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+/* Critical hit-testing fix: inactive screens and all descendants must never intercept input. */
+.screen:not(.active) { pointer-events: none !important; }
+.screen:not(.active) * { pointer-events: none !important; }
+.screen.darken { background: rgba(0,0,0,0.6); backdrop-filter: blur(5px); z-index: 10; }
+
+/* TYPOGRAPHY */
+h1, h2 { font-family: var(--serif); font-weight: 600; line-height: 1.15; }
+h1 {
+  font-size: clamp(2.2rem, 7vw, 3.8rem);
+  color: var(--ink);
+  text-shadow: 0 0 20px var(--rose-glow);
+}
+h2 {
+  font-size: clamp(1.6rem, 4.5vw, 2.4rem);
+  color: var(--rose);
+  text-shadow: 0 0 15px rgba(240, 166, 200, 0.3);
+}
+p {
+  font-family: var(--sans);
+  color: var(--dim);
+  font-size: clamp(0.95rem, 2vw, 1.1rem);
+  max-width: 34rem;
+  line-height: 1.6;
+}
+.italic {
+  font-style: italic;
+  color: var(--gold);
+  font-family: var(--serif);
+  font-size: clamp(1.15rem, 2.5vw, 1.45rem);
+  text-shadow: 0 0 10px var(--gold-glow);
+}
+.story-text {
+  font-family: var(--serif); font-size: clamp(1.4rem, 3vw, 1.8rem); color: var(--ink);
+  line-height: 1.5; min-height: 3em; text-shadow: 0 0 12px rgba(255,255,255,0.2);
+  opacity: 0; transform: translateY(10px); transition: all 0.8s ease;
+}
+.story-text.show { opacity: 1; transform: translateY(0); }
+
+/* BUTTONS */
+button {
+  font-family: var(--sans);
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  color: var(--void);
+  background: linear-gradient(135deg, var(--rose), var(--gold));
+  border: none;
+  border-radius: 999px;
+  padding: 0.85rem 2.2rem;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 6px 24px rgba(240, 166, 200, 0.28);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+button:hover:not(:disabled) {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 12px 32px rgba(240, 166, 200, 0.45);
+}
+button:active:not(:disabled) { transform: translateY(0) scale(0.98); }
+button.ghost {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink);
+  border: 1px solid rgba(244, 240, 251, 0.25);
+  box-shadow: none;
+  backdrop-filter: blur(8px);
+}
+button.ghost:hover:not(:disabled) {
+  border-color: var(--rose);
+  background: rgba(240, 166, 200, 0.12);
+  box-shadow: 0 0 15px var(--rose-glow);
+}
+button:disabled { opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: none; }
+.row { display: flex; gap: 0.8rem; flex-wrap: wrap; justify-content: center; }
+
+/* CANVAS CONTAINERS */
+.particle-canvas {
+  width: min(100%, 900px);
+  height: clamp(280px, 48vh, 460px);
+  min-height: 240px;
+  display: block;
+  margin: 0 auto;
+  overflow: visible;
+  touch-action: none;
+}
+
+/* 3 STARS CHAPTER */
+.star-cluster { position: relative; width: 300px; height: 300px; display: flex; align-items: center; justify-content: center; }
+.touch-star {
+  position: absolute; font-size: 2.5rem; color: var(--gold); cursor: pointer;
+  text-shadow: 0 0 20px var(--gold-glow); transition: all 0.4s ease;
+  animation: float 3s ease-in-out infinite; user-select: none;
+}
+.touch-star:hover { transform: scale(1.2); text-shadow: 0 0 35px var(--gold); }
+.touch-star.opened { opacity: 0; pointer-events: none; transform: scale(2) rotate(45deg); filter: blur(5px); }
+.touch-star:nth-child(1) { top: 20%; left: 20%; animation-delay: 0s; }
+.touch-star:nth-child(2) { top: 50%; right: 15%; animation-delay: 0.5s; }
+.touch-star:nth-child(3) { bottom: 15%; left: 40%; animation-delay: 1s; }
+.final-star {
+  font-size: 3rem; color: var(--rose); opacity: 0; pointer-events: none;
+  text-shadow: 0 0 30px var(--rose-glow); transition: all 1s ease;
+}
+.final-star.show { opacity: 1; pointer-events: auto; animation: pulseGlow 2s infinite alternate; }
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+/* MEMORY UPLOAD & META */
+.dropzone {
+  width: min(30rem, 88vw); border: 1.5px dashed rgba(240, 166, 200, 0.4);
+  background: rgba(255, 255, 255, 0.02); border-radius: 20px; padding: 2.2rem 1rem;
+  color: var(--dim); cursor: pointer; transition: all 0.3s;
+}
+.dropzone:hover, .dropzone.drag { border-color: var(--rose); background: rgba(240, 166, 200, 0.08); box-shadow: 0 0 20px var(--rose-glow); }
+
+.meta-list { display: flex; flex-direction: column; gap: 1rem; width: 100%; max-width: 32rem; margin-top: 1rem; }
+.meta-item {
+  display: flex; gap: 1rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1);
+  padding: 1rem; border-radius: 16px; align-items: center; text-align: left; transition: transform 0.3s;
+}
+.meta-item.featured { border-color: var(--rose); box-shadow: 0 0 20px var(--rose-glow); transform: scale(1.02); }
+.meta-thumb { width: 60px; height: 60px; border-radius: 10px; object-fit: cover; cursor: pointer; }
+.meta-inputs { display: flex; flex-direction: column; gap: 0.5rem; flex: 1; }
+.meta-inputs input, .meta-inputs select {
+  background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: var(--ink);
+  padding: 0.5rem; border-radius: 8px; font-family: var(--sans); font-size: 0.9rem; outline: none;
+}
+.meta-inputs input:focus { border-color: var(--gold); }
+
+/* GALLERY BOARD */
+.gallery {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); grid-gap: 14px;
+  width: 100%; max-width: 56rem; max-height: 58vh; overflow-y: auto; padding: 0.8rem;
+}
+.memcard {
+  position: relative; border-radius: 16px; overflow: hidden; cursor: pointer; background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(244,240,251,0.12); transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1); aspect-ratio: 1;
+}
+.memcard.portrait { grid-row: span 2; aspect-ratio: auto; }
+.memcard.landscape { grid-column: span 2; aspect-ratio: auto; }
+.memcard:hover { transform: translateY(-6px) scale(1.03); box-shadow: 0 16px 36px rgba(0,0,0,0.6); border-color: var(--rose); z-index: 2; }
+.memcard img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.memcard .cap {
+  position: absolute; bottom: 0; inset-x: 0; padding: 0.6rem; font-size: 0.75rem;
+  background: linear-gradient(to top, rgba(0,0,0,0.85), transparent); color: var(--ink); text-align: left;
+}
+
+/* TIMELINE */
+.timeline { display: flex; flex-direction: column; gap: 1.5rem; text-align: left; max-width: 30rem; width: 100%; margin: 1rem 0; }
+.tl-item { position: relative; padding-left: 2rem; cursor: pointer; opacity: 0; transform: translateX(-20px); transition: all 0.5s ease; }
+.tl-item.show { opacity: 1; transform: translateX(0); }
+.tl-item::before {
+  content: '✦'; position: absolute; left: 0; top: 2px; color: var(--gold); font-size: 1.2rem;
+  text-shadow: 0 0 10px var(--gold-glow); transition: all 0.3s;
+}
+.tl-item:hover::before { transform: scale(1.3) rotate(90deg); color: var(--rose); }
+.tl-item:not(:last-child)::after {
+  content: ''; position: absolute; left: 0.55rem; top: 1.8rem; bottom: -1rem;
+  width: 1px; background: rgba(255,255,255,0.15);
+}
+.tl-title { font-family: var(--serif); font-size: 1.2rem; color: var(--rose); }
+.tl-text { font-size: 0.9rem; color: var(--dim); margin-top: 0.3rem; }
+
+/* TIME CAPSULE */
+.capsule {
+  font-size: 4rem; cursor: pointer; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  filter: drop-shadow(0 0 20px rgba(255,255,255,0.2));
+}
+.capsule:hover { transform: scale(1.1) rotate(-5deg); filter: drop-shadow(0 0 30px var(--gold)); }
+.capsule.opened { transform: scale(0); opacity: 0; pointer-events: none; }
+
+/* LETTER */
+.letter-box {
+  white-space: pre-wrap; font-family: var(--serif); font-size: clamp(1.1rem, 2.3vw, 1.35rem); color: var(--ink);
+  max-width: 36rem; min-height: 10em; text-align: left; line-height: 1.75; padding: 1.4rem;
+  background: rgba(19, 13, 42, 0.5); border: 1px solid rgba(240, 166, 200, 0.2); border-radius: 20px;
+  backdrop-filter: blur(10px); box-shadow: inset 0 2px 10px rgba(0,0,0,0.3);
+}
+.caret { display: inline-block; width: 2px; background: var(--gold); animation: blink 0.9s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* PIN CARD & KEYPAD */
+.pin-card {
+  background: rgba(19, 13, 42, 0.75); border: 1px solid rgba(240, 166, 200, 0.3);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 28px;
+  padding: 2.2rem 1.8rem; width: min(22rem, 90vw);
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  display: flex; flex-direction: column; align-items: center; gap: 1.2rem;
+}
+.pin-title { font-family: var(--serif); font-size: 1.8rem; color: var(--rose); font-weight: 600; }
+.pin-display {
+  font-family: var(--sans); font-size: 2.2rem; font-weight: 600; letter-spacing: 0.3em;
+  color: var(--gold); background: rgba(6, 5, 14, 0.65); border: 1.5px solid rgba(240, 166, 200, 0.35);
+  border-radius: 16px; width: 100%; height: 4rem; display: flex; align-items: center; justify-content: center;
+  box-shadow: inset 0 2px 10px rgba(0,0,0,0.5); text-shadow: 0 0 14px var(--gold-glow);
+}
+.pin-display .placeholder { font-size: 1rem; letter-spacing: normal; color: rgba(244, 240, 251, 0.3); font-weight: 400; text-shadow: none; }
+.keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; width: 100%; }
+.key-btn {
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(244, 240, 251, 0.15);
+  color: var(--ink); font-size: 1.35rem; font-weight: 600; border-radius: 16px; padding: 0.85rem 0;
+  box-shadow: none; transition: all 0.15s ease;
+}
+.key-btn:hover { background: rgba(240, 166, 200, 0.25); border-color: var(--rose); transform: translateY(-2px); }
+.key-btn:active { transform: translateY(0) scale(0.95); background: rgba(240, 166, 200, 0.4); }
+.action-key { font-size: 1.1rem; color: var(--rose); background: rgba(255, 255, 255, 0.03); }
+.error-msg { color: var(--rose); font-size: 0.85rem; min-height: 1.2em; }
+.shake { animation: shake 0.4s ease; }
+@keyframes shake {
+  10%, 90% { transform: translateX(-5px); }
+  20%, 80% { transform: translateX(6px); }
+  30%, 50%, 70% { transform: translateX(-8px); }
+  40%, 60% { transform: translateX(8px); }
+}
+
+/* OTHER UI */
+#galaxyCanvas {
+  width: 100%; height: min(38rem, 62vh); border-radius: 24px; background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(240, 166, 200, 0.15); cursor: grab;
+}
+#galaxyCanvas:active { cursor: grabbing; }
+
+.settings-panel { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 1rem); right: 1rem; z-index: 40; display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end; }
+.settings-toggle { width: 2.8rem; height: 2.8rem; border-radius: 50%; padding: 0; font-size: 1.2rem; background: rgba(255,255,255,0.08); color: var(--ink); box-shadow: none; border: 1px solid rgba(244,240,251,0.2); backdrop-filter: blur(8px); }
+.settings-body {
+  display: none; flex-direction: column; gap: 0.9rem; background: rgba(19, 13, 42, 0.95); border: 1px solid rgba(240, 166, 200, 0.25);
+  border-radius: 18px; padding: 1.3rem; width: 17rem; font-size: 0.88rem; color: var(--dim); text-align: left; backdrop-filter: blur(14px);
+  box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+}
+.settings-body.open { display: flex; }
+.settings-body label { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; cursor: pointer; }
+.quality-lock {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; padding: .7rem .85rem; border-radius: 12px;
+  color: #ffe7ef; background: linear-gradient(135deg, rgba(255,88,138,.16), rgba(255,202,214,.08));
+  border: 1px solid rgba(255,150,181,.28);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 0 18px rgba(255,90,140,.08);
+  font-size: .78rem; letter-spacing: .04em; text-transform: uppercase;
+}
+
+.toast {
+  position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(20px); background: rgba(19, 13, 42, 0.95);
+  border: 1px solid rgba(240, 166, 200, 0.3); padding: 0.85rem 1.4rem; border-radius: 14px; font-size: 0.9rem; z-index: 200;
+  opacity: 0; pointer-events: none; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); display: flex; gap: 1rem; align-items: center;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+}
+.toast.show { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
+.btn-undo { background: transparent; color: var(--gold); padding: 0; font-weight: 600; box-shadow: none; min-width: auto; }
+
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(6, 5, 14, 0.85); backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center; z-index: 150; opacity: 0; pointer-events: none; transition: opacity 0.3s;
+}
+.modal-backdrop.open { opacity: 1; pointer-events: auto; }
+.modal {
+  background: var(--nebula); border: 1px solid rgba(240, 166, 200, 0.3); border-radius: 24px; padding: 2.2rem;
+  max-width: min(28rem, 90vw); text-align: center; display: flex; flex-direction: column; gap: 1.2rem; align-items: center;
+  box-shadow: 0 30px 60px rgba(0,0,0,0.7);
+}
+
+.one-last-star-btn {
+  position: relative;
+  background: radial-gradient(circle, var(--gold) 0%, rgba(240,166,200,0.8) 100%);
+  color: var(--void); font-weight: 600; border-radius: 999px; padding: 0.9rem 2.2rem;
+  box-shadow: 0 0 25px var(--gold-glow); animation: pulseGlow 2s infinite alternate;
+}
+@keyframes pulseGlow {
+  0% { box-shadow: 0 0 15px var(--gold-glow); transform: scale(1); }
+  100% { box-shadow: 0 0 35px var(--gold-glow), 0 0 15px var(--rose-glow); transform: scale(1.04); }
+}
+
+/* V8.8 AUTO MUSIC */
+.music-live-indicator {
+  position: fixed;
+  right: 4.8rem;
+  top: 1rem;
+  z-index: 120;
+  padding: .38rem .65rem;
+  border-radius: 999px;
+  font-size: .68rem;
+  letter-spacing: .04em;
+  color: rgba(255,235,245,.72);
+  background: rgba(10,7,20,.48);
+  border: 1px solid rgba(255,140,185,.14);
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+
+/* CONSTELLATION CONTINUE BUTTON */
+.constellation-continue {
+  min-width: 170px;
+  transition: opacity .55s ease, transform .55s ease, box-shadow .3s ease, background .3s ease;
+  box-shadow: 0 0 0 1px rgba(255,105,145,.08), 0 0 26px rgba(255,70,130,.18);
+}
+.constellation-continue:hover:not(:disabled) {
+  box-shadow: 0 0 0 1px rgba(255,145,175,.16), 0 0 34px rgba(255,70,130,.32);
+}
+
+/* STABILITY / UX PATCH V8 */
+input, textarea, select { user-select: text; -webkit-user-select: text; }
+button, .touch-star, .capsule, .dropzone, canvas { touch-action: manipulation; }
+#galaxyCanvas, #constellation-canvas { touch-action: none; }
+
+.heart-constellation {
+  width: min(94vw, 820px);
+  height: min(58vh, 560px);
+  min-height: 300px;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(255,70,132,.12), transparent 46%),
+    radial-gradient(circle at 50% 80%, rgba(255,30,85,.06), transparent 52%),
+    linear-gradient(180deg, rgba(18,7,24,.62), rgba(3,3,10,.82));
+  border: 1px solid rgba(255,138,176,.24);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.05),
+    inset 0 -20px 70px rgba(255,40,100,.035),
+    0 20px 70px rgba(0,0,0,.35),
+    0 0 55px rgba(255,70,132,.09);
+}
+.memcard {
+  min-height: 120px;
+  background: linear-gradient(145deg, rgba(255,255,255,.045), rgba(255,255,255,.015));
+}
+.memcard img {
+  object-fit: contain;
+  background: radial-gradient(circle at 50% 45%, rgba(60,40,110,.45), rgba(0,0,0,.35));
+  transition: transform .45s ease, filter .45s ease;
+}
+.memcard:hover img { transform: scale(1.025); }
+.meta-item { position: relative; }
+.meta-item .remove-memory {
+  align-self: flex-start;
+  flex: 0 0 auto;
+  padding: .5rem .7rem;
+  font-size: .78rem;
+  background: rgba(255,255,255,.05);
+  color: var(--ink);
+  border: 1px solid rgba(255,255,255,.15);
+  box-shadow: none;
+}
+.meta-item .remove-memory:hover {
+  border-color: var(--rose);
+  color: var(--rose);
+  background: rgba(240,166,200,.08);
+}
+.story-text { will-change: opacity, transform; }
+.galaxy-note {
+  max-width: 34rem;
+  font-size: .85rem;
+  color: rgba(244,240,251,.58);
+}
+.tap-ripple {
+  position: fixed;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  pointer-events: none;
+  border: 1px solid rgba(255,217,160,.75);
+  box-shadow: 0 0 18px rgba(255,217,160,.45);
+  transform: translate(-50%,-50%) scale(.5);
+  animation: ripple .65s ease-out forwards;
+  z-index: 999;
+}
+@keyframes ripple {
+  to { opacity: 0; transform: translate(-50%,-50%) scale(5); }
+}
+.galaxy-star-label { pointer-events: none; }
+@media (max-width: 480px) {
+  .gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .particle-canvas { height: 280px; }
+  .star-cluster { width: 220px; height: 220px; }
+  .meta-item { align-items: flex-start; }
+  .meta-thumb { width: 56px; height: 56px; }
+}
+.hidden { display: none; }
+
+
+/* ================= QR SHARE ================= */
+.qr-modal {
+  position: fixed; inset: 0; z-index: 260;
+  display: flex; align-items: center; justify-content: center; padding: 1rem;
+  background: rgba(4,3,12,.88); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  opacity: 0; pointer-events: none; transition: opacity .28s ease;
+}
+.qr-modal.open { opacity: 1; pointer-events: auto; }
+.qr-card {
+  position: relative; width: min(94vw, 410px); padding: 1.5rem 1.25rem 1.25rem;
+  border-radius: 26px; text-align: center;
+  background: radial-gradient(circle at 50% 0%, rgba(255,120,170,.15), transparent 48%), linear-gradient(180deg, rgba(28,15,48,.96), rgba(11,7,22,.98));
+  border: 1px solid rgba(255,150,190,.28);
+  box-shadow: 0 30px 80px rgba(0,0,0,.65), 0 0 55px rgba(255,70,132,.13), inset 0 1px 0 rgba(255,255,255,.06);
+  transform: translateY(12px) scale(.97); transition: transform .32s cubic-bezier(.16,1,.3,1);
+}
+.qr-modal.open .qr-card { transform: translateY(0) scale(1); }
+.qr-title { font-family: var(--serif); font-size: clamp(1.45rem,5vw,1.95rem); font-weight: 600; color: var(--rose); text-shadow: 0 0 18px var(--rose-glow); }
+.qr-subtitle { margin-top: .45rem; color: var(--dim); font-size: .88rem; line-height: 1.5; }
+.qr-close {
+  position: absolute; top: .7rem; right: .7rem; width: 2.35rem; height: 2.35rem; padding: 0; border-radius: 50%;
+  background: rgba(255,255,255,.06); color: var(--ink); border: 1px solid rgba(255,255,255,.13);
+  box-shadow: none; font-size: 1.25rem; line-height: 1;
+}
+.qr-close:hover:not(:disabled) { transform: rotate(90deg) scale(1.03); border-color: var(--rose); }
+.qr-canvas {
+  width: 244px; min-height: 244px; margin: 1.2rem auto .9rem; padding: 12px;
+  display: flex; align-items: center; justify-content: center; border-radius: 18px; background: #fff;
+  box-shadow: 0 14px 38px rgba(0,0,0,.38); overflow: hidden;
+}
+.qr-canvas canvas, .qr-canvas img { width: 220px !important; height: 220px !important; max-width: 100%; display: block; }
+.qr-url {
+  width: 100%; max-height: 4.5rem; overflow: auto; padding: .65rem .75rem; border-radius: 12px;
+  background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.09); color: rgba(244,240,251,.7);
+  font-size: .72rem; line-height: 1.4; word-break: break-all; user-select: text; -webkit-user-select: text;
+}
+.qr-hint { margin-top: .7rem; color: rgba(255,225,235,.64); font-size: .72rem; line-height: 1.45; }
+.qr-actions { display: flex; justify-content: center; gap: .65rem; margin-top: .9rem; flex-wrap: wrap; }
+@media (max-width: 480px) {
+  .qr-card { padding: 1.35rem .9rem 1rem; }
+  .qr-canvas { width: 228px; min-height: 228px; }
+  .qr-canvas canvas, .qr-canvas img { width: 204px !important; height: 204px !important; }
+  .qr-actions button { width: 100%; }
+}
+
+</style>
+</head>
+<body>
+  <!-- V8.8: Nhạc nền được nhúng trực tiếp trong HTML để không cần import file thủ công. -->
+  <audio id="bgMusic" preload="auto" loop playsinline autoplay src="Nơi Này Có Anh.mp3"></audio>
+  <audio id="voiceAudio" preload="none" playsinline></audio>
+
+<canvas id="bgcanvas"></canvas>
+<canvas id="fxCanvas"></canvas>
+
+<div class="settings-panel">
+  <button class="settings-toggle" id="btnSettings" aria-label="Cài đặt">⚙</button>
+  <div class="settings-body" id="settingsBody">
+    <label>Âm lượng <input type="range" id="volRange" min="0" max="100" value="55" style="width:6.5rem"></label>
+    <label><span>Tắt tiếng</span><input type="checkbox" id="muteCheck"></label>
+    <label><span>Giảm chuyển động</span><input type="checkbox" id="motionCheck"></label>
+    <div class="quality-lock" aria-label="Chất lượng hiển thị: tối đa">⚡ Hiệu năng hiển thị: TỐI ĐA</div>
+    <button class="ghost" id="btnReplay" style="margin-top:0.3rem; width:100%;">↺ Bắt đầu lại</button>
+  </div>
+</div>
+
+<div class="stage" id="stage">
+
+  <!-- 1. LANDING -->
+  <section class="screen active" id="s-landing">
+    <h1>✨ Love Galaxy</h1>
+    <p class="italic">Một vũ trụ ký ức lung linh đang chờ cậu khám phá...</p>
+    <button id="btnStart">✨ Bắt đầu hành trình</button>
+  </section>
+
+  <!-- 2. PASSWORD -->
+  <section class="screen" id="s-password">
+    <div class="pin-card" id="pinCard">
+      <div class="pin-title">Nhập mật mã</div>
+      <div class="pin-display" id="pinDisplay"><span class="placeholder">Nhập số...</span></div>
+      <div class="error-msg" id="pwError" role="alert"></div>
+      <div class="keypad">
+        <button class="key-btn" data-val="1">1</button>
+        <button class="key-btn" data-val="2">2</button>
+        <button class="key-btn" data-val="3">3</button>
+        <button class="key-btn" data-val="4">4</button>
+        <button class="key-btn" data-val="5">5</button>
+        <button class="key-btn" data-val="6">6</button>
+        <button class="key-btn" data-val="7">7</button>
+        <button class="key-btn" data-val="8">8</button>
+        <button class="key-btn" data-val="9">9</button>
+        <button class="key-btn action-key" id="keyClear">C</button>
+        <button class="key-btn" data-val="0">0</button>
+        <button class="key-btn action-key" id="keyBack">⌫</button>
+      </div>
+      <button id="btnPwSubmit" style="width:100%; margin-top:0.4rem;">Mở khóa 🔑</button>
+    </div>
+  </section>
+
+  <!-- 3. WELCOME & 4. WISH -->
+  <section class="screen" id="s-welcome">
+    <canvas id="txt-canvas" class="particle-canvas"></canvas>
+    <button id="btnToWish" style="display:none;">Đi tiếp nhé →</button>
+  </section>
+  <section class="screen" id="s-wish">
+    <canvas id="wish-canvas" class="particle-canvas"></canvas>
+    <div class="row"><button class="ghost" id="btnWishSkip">Bỏ qua / Đi tiếp</button></div>
+  </section>
+
+  <!-- NEW 5. QUESTION (PRELUDE) -->
+  <section class="screen darken" id="s-pre-question">
+    <div id="preQText" class="story-text">Nhưng thật ra... tớ còn muốn nói một điều khác.</div>
+    <div id="preQText2" class="story-text" style="margin-top:1rem; display:none;">Và lần này, tớ muốn hỏi cậu một câu.</div>
+    <button id="btnHearQuestion" style="margin-top:2rem; opacity:0; transition: opacity 1s;">✨ Nghe thử nhé</button>
+  </section>
+
+  <!-- NEW 6. THE QUESTION -->
+  <section class="screen" id="s-question">
+    <h2 style="margin-bottom:1rem; font-size:2rem;">Cậu có từng tò mò...</h2>
+    <p>...xem trong đầu tớ đang nghĩ gì về cậu không?</p>
+    <div class="row" style="margin-top:1.5rem;">
+      <button id="btnAnsYes">👀 Có chút</button>
+      <button class="ghost" id="btnAnsNo">🌙 Không nói đâu</button>
+    </div>
+    <p id="qReply" class="italic" style="margin-top:2rem; opacity:0; transition:opacity 0.8s;"></p>
+  </section>
+
+  <!-- NEW 7. ABOUT CRUSH (3 STARS) -->
+  <section class="screen" id="s-about">
+    <h2>3 điều tớ luôn nhớ về cậu</h2>
+    <p>Chạm vào từng vì sao nhé.</p>
+    <div class="star-cluster" id="aboutStars">
+      <!-- Generated via JS -->
+    </div>
+    <div id="aboutRevealText" class="story-text" style="position:absolute; bottom:15%; width:90%; min-height:4em;"></div>
+    <div class="final-star" id="oneLastThingStar">✦</div>
+    <button id="btnOneLastThing" style="opacity:0; pointer-events:none; position:absolute; bottom:8%; transition:opacity 1s;">💗 Nói đi</button>
+  </section>
+
+  <!-- NEW 8. CONFESSION BUILDUP -->
+  <section class="screen" id="s-confession">
+    <canvas id="confess-canvas" class="particle-canvas"></canvas>
+    <button id="btnConfessNext" style="display:none; margin-top:1rem;">Tiếp tục ✨</button>
+  </section>
+
+  <!-- NEW 9. RESPONSE ATMOSPHERE -->
+  <section class="screen" id="s-response">
+    <h2>Cậu thấy thiên hà nhỏ này thế nào?</h2>
+    <p style="margin-bottom: 2rem;">Có một chút rung động nào trong đây không?</p>
+    <div class="row">
+      <button class="resp-btn" data-mood="warm">💗 Có một chút</button>
+      <button class="ghost resp-btn" data-mood="playful">🤭 Tớ chưa nói đâu</button>
+      <button class="ghost resp-btn" data-mood="cool">✨ Tớ muốn khám phá tiếp</button>
+    </div>
+  </section>
+
+  <!-- NEW 10. MEMORY PRELUDE -->
+  <section class="screen darken" id="s-memory-prelude">
+    <div class="story-text" id="memPre1">
+        Thế nên tớ mới muốn giữ cậu lại một chút trong thiên hà này...
+    </div>
+
+    <div class="story-text" id="memPre2" style="margin-top:1rem; display:none;">
+        Ít nhất là để cậu biết...
+    </div>
+
+    <div class="story-text" id="memPre3" style="margin-top:1rem; display:none;">
+        cậu từng khiến một người vui chỉ vì cậu xuất hiện.
+    </div>
+    <div class="story-text" id="memPre2" style="margin-top:1rem; display:none;">Không cần phải là những khoảnh khắc hoàn hảo.</div>
+    <div class="story-text" id="memPre3" style="margin-top:1rem; display:none;">Chỉ cần là những khoảnh khắc có ý nghĩa với cậu.</div>
+    <button id="btnToUpload" type="button" aria-label="Đưa ký ức vào" style="position:relative; z-index:120; pointer-events:auto; touch-action:manipulation; margin-top:2rem; opacity:0; transition: opacity 1s, transform .25s ease, box-shadow .25s ease;">📷 Đưa ký ức vào</button>
+  </section>
+
+  <!-- 11. MEDIA UPLOAD (ENHANCED) -->
+  <section class="screen" id="s-media">
+    <h2>Gửi vào thiên hà những ký ức</h2>
+    <p>Chọn tối đa 12 tấm ảnh cậu muốn giữ mãi.</p>
+    <div class="dropzone" id="dropzone" tabindex="0">
+      Kéo thả ảnh vào đây, hoặc bấm để chọn
+      <input type="file" id="fileInput" accept="image/*" multiple hidden>
+    </div>
+    <div class="music-status" aria-live="polite"></div>
+    <button id="btnToMeta" disabled style="margin-top:1rem;">Tiếp theo →</button>
+  </section>
+
+  <!-- NEW 12. MEMORY CAPTION & MOOD -->
+  <section class="screen" id="s-memory-meta">
+    <h2>Cảm xúc của ký ức</h2>
+    <p>Hãy đặt tên và chọn cảm xúc cho từng khoảnh khắc (Chạm vào một ảnh để chọn làm Featured Memory).</p>
+    <div class="meta-list" id="metaList" style="overflow-y:auto; max-height:55vh;"></div>
+    <button id="btnToGalleryMeta" style="margin-top:1rem;">Tạo Memory Board →</button>
+  </section>
+
+  <!-- NEW 13. FEATURED MEMORY ZOOM & TRANSFORM -->
+  <section class="screen darken" id="s-featured">
+    <h2 class="story-text" id="featText1">Tớ muốn giữ lại khoảnh khắc này thật lâu.</h2>
+    <img id="featImg" src="" style="max-width:80%; max-height:40vh; border-radius:12px; box-shadow:0 15px 40px rgba(0,0,0,0.8); margin: 2rem 0; opacity:0; transform:scale(0.8); transition:all 1s;">
+    <p id="featCap" class="italic" style="opacity:0; transition:opacity 1s;"></p>
+    <button id="btnFeatTransform" style="margin-top:2rem; opacity:0; transition:opacity 1s;">Hoá thành vì sao ✨</button>
+  </section>
+
+  <!-- 14. TRANSFORM -->
+  <section class="screen" id="s-transform">
+    <canvas id="tf-canvas" class="particle-canvas"></canvas>
+    <p id="tfLabel" class="italic" style="position:relative; z-index:2; text-shadow:0 0 14px rgba(0,0,0,.95), 0 0 8px rgba(255,217,160,.45);">Đang chuẩn bị gom những đốm sáng từ ký ức...</p>
+  </section>
+
+  <!-- 15. GALLERY BOARD -->
+  <section class="screen" id="s-gallery">
+    <h2>Memory Board</h2>
+    <p>Chạm vào một tấm ảnh để xem nó hoá thành những vì sao.</p>
+    <div class="gallery" id="gallery"></div>
+    <button id="btnToGalaxyBoard" style="margin-top:1rem;">Khám phá Thiên Hà 🌌</button>
+  </section>
+
+  <!-- 16. GALAXY V7 (WITH TIMELINE) -->
+  <section class="screen" id="s-galaxy" style="padding:1rem;">
+    <h2>Thiên hà của chúng ta</h2>
+    <p style="font-size:0.85rem; margin-bottom:0.4rem;">Chạm để tương tác lực hấp dẫn | Bấm vào vì sao để xem</p>
+    <canvas id="galaxyCanvas"></canvas>
+    <div class="row" style="margin-top:0.8rem;">
+      <button class="ghost" id="btnRandomMem">✦ Cho tớ chọn một ký ức</button>
+      <button id="btnGalaxyNext">Cậu nghĩ đây đã là hết chưa? 🌌</button>
+    </div>
+  </section>
+
+  <!-- NEW 17. TIMELINE -->
+  <section class="screen" id="s-timeline">
+    <h2>Our Little Story</h2>
+    <div class="timeline" id="timelineCont"></div>
+    <button class="ghost" id="btnToConstellation" style="margin-top:1.5rem;">Tiếp tục hành trình →</button>
+  </section>
+
+  <!-- 18. CONSTELLATION -->
+  <section class="screen" id="s-constellation">
+    <h2>Nếu đã đi đến đây...</h2>
+    <p>Thử nối các vì sao lại xem. Có những thứ chỉ đẹp khi hai người cùng tạo nên.</p>
+    <canvas id="constellation-canvas" class="particle-canvas heart-constellation" aria-label="Khung nối chòm sao hình trái tim"></canvas>
+    <button id="btnContinueConstellation" class="ghost constellation-continue" type="button" style="display:none; margin-top:0.8rem; opacity:0; transform:translateY(8px); pointer-events:none;">Tiếp tục ✨</button>
+  </section>
+
+  <!-- NEW 19. TIME CAPSULE -->
+  <section class="screen" id="s-capsule">
+    <h2 style="margin-bottom:2rem;">Có một thứ tớ muốn cậu giữ lại.</h2>
+    <div class="capsule" id="timeCapsuleBox">˚.🎁⋆</div>
+    <div id="capsuleMsg" class="story-text" style="margin-top:2rem; max-width:80%;"></div>
+    <button id="btnToLetter" style="margin-top:2rem; opacity:0; pointer-events:none; transition:opacity 1s;">Mở thư 💌</button>
+  </section>
+
+  <!-- 20. LETTER -->
+  <section class="screen" id="s-letter">
+    <h2>Gửi cậu</h2>
+    <div class="letter-box" id="letterBox"></div>
+    <div class="row" style="margin-top:1rem;">
+      <button class="ghost" id="btnLetterSkip">Hiện toàn bộ</button>
+      <button id="btnToVoice" style="display:none;">Còn một điều nữa... 🎧</button>
+      <button id="btnToFinalGalaxy">Kết thúc hành trình →</button>
+    </div>
+  </section>
+
+  <!-- NEW 21. VOICE MESSAGE -->
+  <section class="screen" id="s-voice">
+    <h2>Còn một điều nữa...</h2>
+    <p>Một lời nhắn nhỏ tớ muốn gửi trực tiếp đến cậu.</p>
+    <div style="margin:2rem 0; padding:2rem; border-radius:20px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);">
+      <button id="btnPlayVoice" class="ghost" style="font-size:1.5rem; padding:1rem 2rem;">▶ Phát lời nhắn</button>
+    </div>
+    <button id="btnFromVoiceToFinal">Tiếp tục →</button>
+  </section>
+
+  <!-- NEW 22. FINAL CONFESSION & EXPLOSION -->
+  <section class="screen darken" id="s-final-confession">
+    <div class="story-text" id="fc1">À...</div>
+    <div class="story-text" id="fc2" style="margin-top:1rem; display:none;">Còn một điều cuối cùng.</div>
+    <div class="story-text" id="fc3" style="margin-top:2rem; font-size:2.5rem; color:var(--rose); display:none;">Tớ thích cậu. Thật đấy.</div>
+    <button id="btnFinalExplode" style="margin-top:3rem; opacity:0; transition:opacity 1s;">💫</button>
+  </section>
+
+  <!-- 23. ENDING -->
+  <section class="screen" id="s-final">
+    <h1>Cảm ơn cậu</h1>
+    <p>Vì đã bước vào thiên hà nhỏ này cùng tớ. 💗</p>
+    <div class="row" style="margin-top:1rem;">
+      <button id="btnOneLastStar" class="one-last-star-btn">✨ Xem lại lời tớ vừa nói ✨</button>
+    </div>
+    <div class="row" style="margin-top:0.8rem;">
+      <button id="btnBackToGalaxy">🌌 Bước lại vào thiên hà</button>
+      <button class="ghost" id="btnShareQR" type="button">▣ Hiện mã QR</button>
+      <button class="ghost" id="btnReplay2">↻ Bắt đầu lại</button>
+    </div>
+  </section>
+
+</div>
+
+<!-- QR SHARE MODAL -->
+<div class="qr-modal" id="qrModal" aria-hidden="true">
+  <div class="qr-card" role="dialog" aria-modal="true" aria-labelledby="qrTitle">
+    <button class="qr-close" id="qrClose" type="button" aria-label="Đóng mã QR">×</button>
+    <div class="qr-title" id="qrTitle">🌌 Gửi thiên hà này cho cậu</div>
+    <div class="qr-subtitle">Quét mã này bằng điện thoại để mở đúng địa chỉ của website.</div>
+    <div id="qrCanvas" class="qr-canvas" aria-label="Mã QR chia sẻ website"></div>
+    <div id="qrUrl" class="qr-url"></div>
+    <div id="qrHint" class="qr-hint"></div>
+    <div class="qr-actions">
+      <button id="qrCopy" class="ghost" type="button">📋 Sao chép địa chỉ</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODALS & LIGHTBOX -->
+<div class="modal-backdrop" id="modalConfirm">
+  <div class="modal">
+    <h2>Mật mã chính xác! 🌌</h2>
+    <p>Cậu đã sẵn sàng khám phá Thiên hà này chưa?</p>
+    <div class="row">
+      <button id="btnConfirmYes">✨ Sẵn sàng</button>
+      <button class="ghost" id="btnConfirmNo">🌙 Chờ chút</button>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop" id="modalSecret">
+  <div class="modal" id="modalSecretBody"></div>
+</div>
+
+<div class="toast" id="toast">
+  <span id="toastMsg"></span>
+  <button class="btn-undo" id="btnUndo" style="display:none;">Hoàn tác</button>
+</div>
+<script>
+(function(){
+"use strict";
+
+/* ================= 1. CONFIG & GLOBAL STATE ================= */
+const CONFIG = {
+  senderName: "Tớ", receiverName: "Cậu", password: "1402",
+  // Để trống = dùng URL hiện tại; khi deploy có thể điền URL cố định vào đây.
+  shareUrl: "",
+  wishes: [
+    { text: "Mong hôm nay cậu có thật nhiều niềm vui ✨", hold: 6000 },
+    { text: "Mong những ngày bình thường của cậu cũng luôn có điều để mong chờ  💗", hold: 6500 },
+    { text: "Và mong đâu đó trong những điều cậu nhớ... sẽ có một chút về tớ 💗", hold: 7000 }
+  ],
+  aboutCrush: [
+    {
+      title: "Có một điều tớ rất thích...",
+      text: "Là mỗi lần cậu cười, mọi thứ xung quanh tự nhiên cũng trở nên dễ chịu hơn.",
+      icon: "✦"
+    },
+    {
+      title: "Có một điều tớ hay để ý...",
+      text: "Là cách cậu nói về những điều mình thích. Nhìn cậu lúc ấy... đáng yêu thật.",
+      icon: "✦"
+    },
+    {
+      title: "Và có một điều hơi khó nói...",
+      text: "Tớ không biết từ lúc nào, sự xuất hiện của cậu đã trở thành một phần rất đặc biệt trong ngày của tớ.",
+      icon: "✦"
+    }
+  ],
+  confession: [
+
+    "Tớ từng nghĩ mình chỉ đơn giản là thích nói chuyện với cậu.",
+
+    "Rồi tớ nhận ra... tớ bắt đầu mong tin nhắn của cậu, nhớ những câu chuyện rất bình thường của cậu.",
+
+    "Và có lẽ tớ đã thích cậu nhiều hơn một chút... từ lúc nào chính tớ cũng không nhận ra."
+
+  ],
+  timeline: [
+    { title: "Một ngày", text: "Lần đầu tiên chúng ta nói chuyện thật lâu...", memoryIdx: 0 },
+    { title: "Một cuộc trò chuyện", text: "Khoảnh khắc tớ nhận ra cậu thật đặc biệt.", memoryIdx: 1 },
+    { title: "Một kỷ niệm", text: "Và nhiều ngày sau đó nữa...", memoryIdx: 2 }
+  ],
+  timeCapsule: {
+    message: "Một lời nhắn cho những ngày cậu cần một chút dịu dàng: Luôn có một người mong cậu bình an và hạnh phúc."
+  },
+  letter: "Gửi {receiverName},\n\nCó những điều tớ chưa từng nói thành lời, nên tớ gói chúng vào đây — một thiên hà nhỏ, chỉ dành riêng cho cậu.\n\nCảm ơn cậu vì đã luôn ở đó, làm cho thế giới của tớ dịu dàng và ngập tràn ánh sáng.\n\n— {senderName}",
+  voiceMessage: { enabled: false, source: "" },
+  secret: { requiredClicks: 3, message: "Thật ra phần này tớ không định cho cậu xem... nhưng nếu cậu đã tìm thấy thì thôi vậy. 🤭 Tớ thật sự thích cậu." },
+  particleCap: { low: 1400, medium: 4200, high: 7600 },
+  maxImages: 12,
+  maxImageSizeMB: 15,
+  particleVisual: { halo: true, crispCore: true, imageParticleStep: { low: 5, medium: 3, high: 2 } }
+};
+
+function fill(str){ return str.replaceAll("{senderName}", CONFIG.senderName).replaceAll("{receiverName}", CONFIG.receiverName); }
+
+const STATE = {
+  chapter: "landing", memories: [], objectUrls: new Set(), secretClicks: 0,
+  reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
+  // V8.6: khóa chất lượng hiển thị ở mức cao nhất theo yêu cầu.
+  performanceProfile: "high",
+  isTransitioning: false, enteredPin: "",
+  
+  // V7 Extenstions
+  emotionChoice: null, revealedAboutCrush: [], confessionStep: 0,
+  featuredMemoryId: null, memoryMoods: {}, memoryCaptions: {},
+  discoveredSecrets: [], constellationProgress: 0, timeCapsuleOpened: false, voiceMessagePlayed: false,
+  pendingFiles: 0, transitionToken: 0, constellationRaf: 0, activeTransformRaf: 0,
+  finalRaf: 0, toastUndo: null, secretPositions: []
+};
+
+/* ================= 2. UTILITY ================= */
+let toastTimeout;
+function showToast(msg, undoCallback = null, ms = 3000){
+  const t = document.getElementById("toast"); document.getElementById("toastMsg").textContent = msg;
+  const btnUndo = document.getElementById("btnUndo");
+  if(undoCallback){ btnUndo.style.display = "block"; btnUndo.onclick = () => { undoCallback(); t.classList.remove("show"); }; } 
+  else btnUndo.style.display = "none";
+  t.classList.add("show");
+  clearTimeout(toastTimeout); toastTimeout = setTimeout(() => t.classList.remove("show"), ms);
+}
+
+function trackUrl(u){ STATE.objectUrls.add(u); return u; }
+function revokeAll(){ STATE.objectUrls.forEach(u => { try { URL.revokeObjectURL(u); } catch(e){} }); STATE.objectUrls.clear(); }
+
+const screens = {}; document.querySelectorAll(".screen").forEach(s => screens[s.id] = s);
+function goTo(id, onEnter, options = {}){
+  const force = !!options.force;
+  if(STATE.isTransitioning && !force) return;
+  const target = screens["s-" + id];
+  if(!target) return;
+  STATE.isTransitioning = true;
+  STATE.transitionToken++;
+  const token = STATE.transitionToken;
+  Object.values(screens).forEach(s => s.classList.remove("active"));
+  STATE.chapter = id;
+  setTimeout(() => {
+    if(token !== STATE.transitionToken) return;
+    target.classList.add("active");
+    setTimeout(() => {
+      if(token !== STATE.transitionToken) return;
+      STATE.isTransitioning = false;
+      if(typeof onEnter === "function") onEnter();
+    }, 320);
+  }, 110);
+}
+function wait(ms, token = STATE.transitionToken){
+  return new Promise(resolve => setTimeout(() => resolve(token === STATE.transitionToken), ms));
+}
+function showText(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.style.display = "block";
+  requestAnimationFrame(() => el.classList.add("show"));
+}
+
+function createTapRipple(x, y){
+  if(STATE.reducedMotion) return;
+  const dot = document.createElement("span");
+  dot.className = "tap-ripple";
+  dot.style.left = `${x}px`;
+  dot.style.top = `${y}px`;
+  document.body.appendChild(dot);
+  dot.addEventListener("animationend", () => dot.remove(), { once: true });
+}
+
+/* ================= 3. AUDIO ================= */
+const AudioManager = (function(){
+  const audio = document.getElementById("bgMusic");
+  const voiceAudio = document.getElementById("voiceAudio");
+  const DEFAULT_SOURCE = audio?.getAttribute("src") || "";
+  let hasInteracted = false;
+
+  if(audio){
+    audio.loop = true;
+    audio.preload = "auto";
+    audio.autoplay = true;
+    audio.volume = 0.48;
+    audio.playsInline = true;
+  }
+
+  const tryStart = () => {
+    if(!audio || !audio.src || audio.muted) return;
+    hasInteracted = true;
+    audio.play().catch(() => {
+      /* Browser autoplay policy may require another gesture. */
+    });
+  };
+
+  const rememberInteraction = () => tryStart();
+  document.addEventListener("pointerdown", rememberInteraction, { passive: true });
+  document.addEventListener("touchstart", rememberInteraction, { passive: true });
+  document.addEventListener("keydown", rememberInteraction, { passive: true });
+
+  // Try immediately; if blocked, the first user gesture above starts it.
+  window.setTimeout(tryStart, 60);
+
+  return {
+    init(){
+      if(audio && !audio.src) audio.src = DEFAULT_SOURCE;
+      tryStart();
+    },
+    play(){
+      hasInteracted = true;
+      if(audio?.src) return audio.play().catch(()=>{});
+    },
+    pause(){ audio?.pause(); },
+    isPaused(){ return audio ? audio.paused : true; },
+    setVolume(v){
+      if(audio) audio.volume = Math.max(0, Math.min(1, Number(v) || 0));
+    },
+    setMute(m){
+      if(audio) audio.muted = !!m;
+      if(!m) tryStart();
+    },
+    getMuted(){ return audio ? audio.muted : false; },
+    getVolume(){ return audio ? audio.volume : 0.48; },
+    getSource(){ return audio ? audio.currentSrc || audio.src : DEFAULT_SOURCE; },
+    playVoice(url){
+      if(!voiceAudio || !url) return false;
+      voiceAudio.pause();
+      voiceAudio.currentTime = 0;
+      voiceAudio.src = url;
+      voiceAudio.play().catch(()=>{});
+      return true;
+    },
+    stopVoice(){
+      if(!voiceAudio) return;
+      voiceAudio.pause();
+      voiceAudio.currentTime = 0;
+      voiceAudio.removeAttribute("src");
+      voiceAudio.load();
+      if(hasInteracted) tryStart();
+    },
+    reset(){
+      // Background music is intentionally NOT reset: it must continue
+      // from the first page through replay and the entire experience.
+      if(voiceAudio){
+        voiceAudio.pause();
+        voiceAudio.currentTime = 0;
+        voiceAudio.removeAttribute("src");
+        voiceAudio.load();
+      }
+      if(audio){
+        audio.loop = true;
+        if(audio.paused && hasInteracted && !audio.muted) audio.play().catch(()=>{});
+      }
+    }
+  };
+})();
+AudioManager.init();;
+
+/* ================= 4. BACKGROUND ================= */
+const bg = document.getElementById("bgcanvas"), bgctx = bg.getContext("2d", { alpha: false });
+let stars = [], meteors = [], bgRaf, bgSpeed = 1, bgColorOffset = 0;
+
+function initBg(){
+  const dpr = Math.min(window.devicePixelRatio || 1, STATE.performanceProfile === "high" ? 1.75 : 1.35);
+  bg.width = Math.max(1, Math.floor(window.innerWidth * dpr));
+  bg.height = Math.max(1, Math.floor(window.innerHeight * dpr));
+  bg.style.width = window.innerWidth + "px";
+  bg.style.height = window.innerHeight + "px";
+  bgctx.setTransform(1, 0, 0, 1, 0, 0);
+  bgctx.scale(dpr, dpr);
+  const count = STATE.performanceProfile === "high" ? 220 : STATE.performanceProfile === "medium" ? 145 : 90;
+  stars = Array.from({ length: count }, () => ({
+    x: Math.random()*window.innerWidth,
+    y: Math.random()*window.innerHeight,
+    r: Math.random()*1.5+0.35,
+    a: Math.random()*0.7+0.2,
+    tw: Math.random()*0.02+0.005,
+    dir: Math.random()>0.5?1:-1
+  }));
+}
+function spawnMeteor(){ if(Math.random() < 0.03 && meteors.length < 3) meteors.push({ x: Math.random()*window.innerWidth*0.8, y: Math.random()*window.innerHeight*0.3, len: Math.random()*80+50, speed: (Math.random()*6+4)*bgSpeed, life: 1, angle: Math.PI/4 }); }
+
+function drawBG(){
+  bgctx.clearRect(0,0,window.innerWidth,window.innerHeight);
+  const grd = bgctx.createRadialGradient(window.innerWidth/2, window.innerHeight*0.4, 0, window.innerWidth/2, window.innerHeight*0.4, window.innerWidth);
+  grd.addColorStop(0, `rgba(33, 19, 67, 0.45)`); grd.addColorStop(0.6, `rgba(19, 13, 42, 0.25)`); grd.addColorStop(1, "rgba(6, 5, 14, 0)");
+  bgctx.fillStyle = grd; bgctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+  
+  bgctx.fillStyle = "#f4f0fb";
+  for(const s of stars){
+    if(!STATE.reducedMotion){ s.a += s.tw * s.dir * bgSpeed; if(s.a > 0.85 || s.a < 0.15) s.dir *= -1; }
+    bgctx.globalAlpha = s.a; bgctx.beginPath(); bgctx.arc(s.x, s.y, s.r, 0, Math.PI*2); bgctx.fill();
+  }
+  
+  if(!STATE.reducedMotion){
+    spawnMeteor();
+    for(let i = meteors.length-1; i>=0; i--){
+      const m = meteors[i]; m.x += Math.cos(m.angle)*m.speed; m.y += Math.sin(m.angle)*m.speed; m.life -= 0.015 * bgSpeed;
+      const tailX = m.x - Math.cos(m.angle)*m.len, tailY = m.y - Math.sin(m.angle)*m.len;
+      const mgrad = bgctx.createLinearGradient(m.x, m.y, tailX, tailY);
+      mgrad.addColorStop(0, `rgba(255, 217, 160, ${m.life})`); mgrad.addColorStop(1, `rgba(240, 166, 200, 0)`);
+      bgctx.strokeStyle = mgrad; bgctx.lineWidth = 1.8; bgctx.beginPath(); bgctx.moveTo(m.x, m.y); bgctx.lineTo(tailX, tailY); bgctx.stroke();
+      if(m.life <= 0) meteors.splice(i, 1);
+    }
+  }
+  bgctx.globalAlpha = 1; bgRaf = requestAnimationFrame(drawBG);
+}
+initBg(); drawBG(); window.addEventListener("resize", () => { clearTimeout(bg._timer); bg._timer = setTimeout(initBg, 200); });
+
+/* ================= 5. PARTICLE ENGINE ================= */
+function runParticleText(canvas, text, opts = {}){
+  if(!canvas) return { skip(){} };
+
+  const ctx = canvas.getContext("2d", { alpha: true });
+  const dpr = Math.min(window.devicePixelRatio || 1, 2.25);
+  const rect = canvas.getBoundingClientRect();
+  const w = Math.max(320, Math.round(rect.width || 800));
+  const h = Math.max(180, Math.round(rect.height || 300));
+
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+
+  const off = document.createElement("canvas");
+  off.width = w;
+  off.height = h;
+  const octx = off.getContext("2d", { willReadFrequently: true });
+
+  const words = String(text || "").trim().split(/\s+/).filter(Boolean);
+  let fontSize = Math.min(opts.fontSize || 60, h * 0.38);
+  let lines = [];
+
+  const buildLines = () => {
+    lines = [];
+    let current = "";
+    octx.font = `600 ${fontSize}px 'Cormorant Garamond', serif`;
+
+    for(const word of words){
+      const test = current ? `${current} ${word}` : word;
+      if(octx.measureText(test).width > w * 0.92 && current){
+        lines.push(current);
+        current = word;
+      }else{
+        current = test;
+      }
+    }
+    if(current) lines.push(current);
+  };
+
+  buildLines();
+  while(lines.length > 2 && fontSize > 27){
+    fontSize -= 2;
+    buildLines();
+  }
+
+  const lineHeight = fontSize * 1.08;
+  octx.clearRect(0, 0, w, h);
+  octx.fillStyle = "#fff";
+  octx.font = `600 ${fontSize}px 'Cormorant Garamond', serif`;
+  octx.textAlign = "center";
+  octx.textBaseline = "middle";
+
+  const firstY = h / 2 - ((lines.length - 1) * lineHeight) / 2;
+  lines.forEach((line, index) => octx.fillText(line, w / 2, firstY + index * lineHeight));
+
+  const data = octx.getImageData(0, 0, w, h).data;
+
+  // V8.6: lấy mẫu dày hơn để nét chữ liền mạch và ít bị rỗ.
+  const sampleStep = 2;
+  let points = [];
+  for(let y = 0; y < h; y += sampleStep){
+    for(let x = 0; x < w; x += sampleStep){
+      const a = data[(y * w + x) * 4 + 3];
+      if(a > 72) points.push({ x, y, alpha: a / 255 });
+    }
+  }
+
+  const cap = 7600;
+  if(points.length > cap){
+    // Giữ mẫu đều thay vì lấy ngẫu nhiên để đường viền chữ không bị răng cưa.
+    const stride = Math.ceil(points.length / cap);
+    points = points.filter((_, index) => index % stride === 0);
+  }
+
+  const particles = points.map((point, index) => {
+    const warmPink = index % 5 !== 0;
+    return {
+      x: w / 2 + (Math.random() - 0.5) * w * 0.72,
+      y: h / 2 + (Math.random() - 0.5) * h * 0.72,
+      tx: point.x,
+      ty: point.y,
+      vx: 0,
+      vy: 0,
+      alpha: point.alpha,
+      size: 1.35 + Math.random() * 0.95,
+      // Hồng đậm + đỏ hồng; tránh vàng/trắng làm chữ bị nhạt.
+      hue: warmPink ? 338 + Math.random() * 12 : 350 + Math.random() * 10,
+      phase: Math.random() * Math.PI * 2
+    };
+  });
+
+  let phase = "form";
+  let phaseStart = performance.now();
+  let raf = 0;
+  let finished = false;
+
+  const finish = () => {
+    if(finished) return;
+    finished = true;
+    cancelAnimationFrame(raf);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    if(typeof opts.onDone === "function") opts.onDone();
+  };
+
+  function drawParticle(p, ts){
+    const breathe = 1 + Math.sin(ts * 0.003 + p.phase) * 0.035;
+    const radius = p.size * breathe;
+    let alpha = Math.min(1, p.alpha * 1.08);
+
+    if(phase === "form"){
+      alpha = Math.min(1, 0.48 + Math.hypot(p.vx, p.vy) * 0.14);
+    }else if(phase === "dissolve"){
+      alpha = Math.max(0, p.alpha * (1 - (ts - phaseStart) / 1250));
+    }
+
+    // Lớp aura mềm.
+    ctx.globalAlpha = alpha * 0.22;
+    ctx.fillStyle = `hsl(${p.hue}, 100%, 68%)`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, radius * 3.0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Core hồng/đỏ sắc nét.
+    ctx.globalAlpha = Math.min(1, alpha);
+    ctx.fillStyle = `hsl(${p.hue}, 96%, 82%)`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Tâm sáng nhỏ để chữ có cảm giác mịn thay vì là những ô chấm thô.
+    ctx.globalAlpha = alpha * 0.52;
+    ctx.fillStyle = "#fff3f7";
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, Math.max(0.55, radius * 0.38), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function frame(ts){
+    if(finished) return;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.globalCompositeOperation = "lighter";
+
+    let settled = true;
+
+    for(const p of particles){
+      let dx = 0, dy = 0;
+
+      if(phase === "form" || phase === "hold"){
+        dx = p.tx - p.x;
+        dy = p.ty - p.y;
+      }else{
+        const spread = 86;
+        dx = (w / 2 - p.x) + (Math.random() - 0.5) * spread;
+        dy = -Math.random() * h * 0.76 - 16;
+      }
+
+      const spring = phase === "form" ? 0.064 : 0.055;
+      p.vx += dx * spring;
+      p.vy += dy * spring;
+      p.vx *= 0.80;
+      p.vy *= 0.80;
+      p.x += p.vx;
+      p.y += p.vy;
+
+      if(Math.abs(dx) > 1.3 || Math.abs(dy) > 1.3) settled = false;
+      drawParticle(p, ts);
+    }
+
+    ctx.globalAlpha = 1;
+    const elapsed = ts - phaseStart;
+
+    if(phase === "form" && (settled || elapsed > 1750)){
+      phase = "hold";
+      phaseStart = ts;
+    }else if(phase === "hold" && elapsed > (opts.hold || 2200)){
+      phase = "dissolve";
+      phaseStart = ts;
+    }else if(phase === "dissolve" && elapsed > 1250){
+      finish();
+      return;
+    }
+
+    raf = requestAnimationFrame(frame);
+  }
+
+  raf = requestAnimationFrame(frame);
+
+  return {
+    skip: finish,
+    destroy: finish
+  };
+}
+
+/* ================= 6. START & PASSWORD ================= */
+document.getElementById("btnStart").onclick = () => goTo("password");
+const pinDisplay = document.getElementById("pinDisplay"), pwError = document.getElementById("pwError");
+function updatePinDisplay(){ pinDisplay.innerHTML = STATE.enteredPin.length===0 ? '<span class="placeholder">Nhập số...</span>' : STATE.enteredPin; }
+function handlePinInput(val){
+  pwError.textContent = "";
+  if(val==="CLEAR") STATE.enteredPin = ""; else if(val==="BACK") STATE.enteredPin = STATE.enteredPin.slice(0,-1);
+  else if(STATE.enteredPin.length<8) STATE.enteredPin += val;
+  updatePinDisplay();
+}
+document.querySelectorAll(".keypad .key-btn").forEach(btn => btn.onclick = () => handlePinInput(btn.getAttribute("data-val")||""));
+document.getElementById("keyClear").onclick = () => handlePinInput("CLEAR");
+document.getElementById("keyBack").onclick = () => handlePinInput("BACK");
+window.addEventListener("keydown", e => {
+  if(STATE.chapter!=="password") return;
+  if(e.key>="0" && e.key<="9") handlePinInput(e.key); else if(e.key==="Backspace") handlePinInput("BACK"); else if(e.key==="Escape") handlePinInput("CLEAR"); else if(e.key==="Enter") submitPw();
+});
+function submitPw(){
+  if(STATE.enteredPin === CONFIG.password){ document.getElementById("modalConfirm").classList.add("open"); }
+  else { pwError.textContent = "Mật mã chưa đúng, thử lại nhé."; document.getElementById("pinCard").classList.add("shake"); setTimeout(()=>document.getElementById("pinCard").classList.remove("shake"), 400); }
+}
+document.getElementById("btnPwSubmit").onclick = submitPw;
+document.getElementById("btnConfirmNo").onclick = () => document.getElementById("modalConfirm").classList.remove("open");
+document.getElementById("btnConfirmYes").onclick = () => {
+  document.getElementById("modalConfirm").classList.remove("open");
+  goTo("welcome", () => {
+    runParticleText(document.getElementById("txt-canvas"), "Chào cậu 🌙", { hold: 1500, onDone: () => goTo("wish", startWishes) });
+  });
+};
+
+/* ================= 7. WISHES -> PRE-QUESTION ================= */
+let wishIndex = 0, wishCtrl = null;
+document.getElementById("btnWishSkip").onclick = () => { if(wishCtrl) wishCtrl.skip(); };
+function startWishes(){ wishIndex = 0; playNextWish(); }
+function playNextWish(){
+  if(wishIndex >= CONFIG.wishes.length){ 
+    // V7 Transition: slow down bg, show dark prelude
+    bgSpeed = 0.2; 
+    goTo("pre-question", async () => {
+      showText("preQText");
+      await wait(2500);
+      showText("preQText2");
+      await wait(1500);
+      document.getElementById("btnHearQuestion").style.opacity = 1;
+    });
+    return; 
+  }
+  const w = CONFIG.wishes[wishIndex++];
+  wishCtrl = runParticleText(document.getElementById("wish-canvas"), w.text, { hold: w.hold, onDone: playNextWish });
+}
+
+/* ================= 8. QUESTION & ABOUT CRUSH ================= */
+document.getElementById("btnHearQuestion").onclick = () => goTo("question");
+document.getElementById("btnAnsYes").onclick = () => handleQuestionAns("Vậy thì đi tiếp một chút nhé... ✨");
+document.getElementById("btnAnsNo").onclick = () => handleQuestionAns("Được thôi... nhưng tớ vẫn sẽ bật mí một chút. 🤭");
+
+async function handleQuestionAns(replyText){
+  document.getElementById("btnAnsYes").disabled = true; document.getElementById("btnAnsNo").disabled = true;
+  const reply = document.getElementById("qReply");
+  reply.textContent = replyText; reply.style.opacity = 1;
+  await wait(2000);
+  goTo("about", initAboutCrush);
+}
+
+function initAboutCrush(){
+  const container = document.getElementById("aboutStars"); container.innerHTML = "";
+  STATE.revealedAboutCrush = [];
+  CONFIG.aboutCrush.forEach((item, i) => {
+    const star = document.createElement("div"); star.className = "touch-star"; star.textContent = item.icon || "✦";
+    star.onclick = () => revealAboutStar(star, i, item);
+    container.appendChild(star);
+  });
+}
+function revealAboutStar(el, idx, item){
+  if(STATE.revealedAboutCrush.includes(idx)) return;
+  STATE.revealedAboutCrush.push(idx);
+  el.classList.add("opened");
+  const txt = document.getElementById("aboutRevealText");
+  txt.classList.remove("show");
+  setTimeout(() => { txt.innerHTML = `0${idx+1} &mdash; ${item.title}`; txt.classList.add("show"); }, 400);
+  
+  if(STATE.revealedAboutCrush.length === CONFIG.aboutCrush.length){
+    setTimeout(() => {
+      txt.classList.remove("show");
+      setTimeout(() => { 
+        txt.innerHTML = "Nhưng còn một điều... tớ chưa biết nên nói thế nào."; 
+        txt.classList.add("show");
+        const fStar = document.getElementById("oneLastThingStar");
+        fStar.classList.add("show");
+        setTimeout(() => {
+          const btn = document.getElementById("btnOneLastThing");
+          btn.style.opacity = 1;
+          btn.style.pointerEvents = "auto";
+        }, 1000);
+      }, 800);
+    }, 3000);
+  }
+}
+document.getElementById("btnOneLastThing").onclick = () => goTo("confession", startConfessionBuildup);
+
+/* ================= 9. CONFESSION BUILDUP & RESPONSE ================= */
+function startConfessionBuildup(){
+  STATE.confessionStep = 0; playNextConfession();
+}
+function playNextConfession(){
+  if(STATE.confessionStep >= CONFIG.confession.length){
+    setTimeout(() => goTo("response"), 1000); return;
+  }
+  const text = CONFIG.confession[STATE.confessionStep++];
+  runParticleText(document.getElementById("confess-canvas"), text, { hold: 7000, onDone: playNextConfession });
+}
+
+document.querySelectorAll(".resp-btn").forEach(btn => {
+  btn.onclick = () => {
+    const mood = btn.getAttribute("data-mood");
+    STATE.emotionChoice = mood;
+    if(mood === "warm") document.body.classList.add("mood-warm");
+    if(mood === "cool") document.body.classList.add("mood-cool");
+    
+    goTo("memory-prelude", async () => {
+      bgSpeed = 1;
+      showText("memPre1"); await wait(2500);
+      showText("memPre2"); await wait(2000);
+      showText("memPre3"); await wait(1500);
+      const uploadBtn = document.getElementById("btnToUpload");
+      uploadBtn.disabled = false;
+      uploadBtn.style.opacity = "1";
+      uploadBtn.style.pointerEvents = "auto";
+      uploadBtn.style.zIndex = "120";
+      uploadBtn.style.position = "relative";
+      uploadBtn.style.touchAction = "manipulation";
+      uploadBtn.focus({ preventScroll: true });
+    });
+  };
+});
+const btnToUpload = document.getElementById("btnToUpload");
+btnToUpload.onclick = () => {
+  if (STATE.chapter !== "memory-prelude") return;
+  goTo("media", null, { force: true });
+};
+btnToUpload.addEventListener("pointerup", event => {
+  if (event.pointerType === "touch" && STATE.chapter === "memory-prelude") {
+    event.preventDefault();
+    btnToUpload.click();
+  }
+});
+
+/* ================= 10. MEDIA UPLOAD (ENHANCED V7) ================= */
+const dropzone = document.getElementById("dropzone"), fileInput = document.getElementById("fileInput");
+dropzone.onclick = () => fileInput.click();
+["dragenter", "dragover"].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add("drag"); }));
+["dragleave", "drop"].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.remove("drag"); }));
+dropzone.addEventListener("drop", e => handleFiles(e.dataTransfer.files));
+fileInput.addEventListener("change", e => handleFiles(e.target.files));
+dropzone.addEventListener("keydown", e => {
+  if(e.key === "Enter" || e.key === " "){
+    e.preventDefault();
+    fileInput.click();
+  }
+});
+
+function handleFiles(fileList){
+  const candidates = Array.from(fileList || []).filter(f => f && f.type.startsWith("image/"));
+  if(!candidates.length){
+    showToast("Vui lòng chọn tệp ảnh hợp lệ.");
+    return;
+  }
+
+  const available = CONFIG.maxImages - STATE.memories.length - STATE.pendingFiles;
+  if(available <= 0){
+    showToast(`Đã đạt tối đa ${CONFIG.maxImages} ảnh.`);
+    return;
+  }
+
+  let accepted = 0;
+  for(const file of candidates){
+    if(accepted >= available) break;
+
+    if(file.size > CONFIG.maxImageSizeMB * 1024 * 1024){
+      showToast(`${file.name} quá lớn. Tối đa ${CONFIG.maxImageSizeMB} MB/ảnh.`);
+      continue;
+    }
+
+    const duplicate = STATE.memories.some(m =>
+      m.name === file.name &&
+      m.size === file.size &&
+      m.lastModified === file.lastModified
+    );
+
+    if(duplicate){
+      showToast(`Đã có "${file.name}" trong danh sách.`);
+      continue;
+    }
+
+    const url = trackUrl(URL.createObjectURL(file));
+    STATE.pendingFiles++;
+    accepted++;
+
+    const img = new Image();
+    img.onload = () => {
+      STATE.pendingFiles = Math.max(0, STATE.pendingFiles - 1);
+
+      const aspectRatio = img.width / Math.max(img.height, 1);
+      const memory = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        file,
+        url,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        lastModified: file.lastModified,
+        width: img.naturalWidth || img.width,
+        height: img.naturalHeight || img.height,
+        aspectRatio,
+        aspect: aspectRatio > 1.25 ? "landscape" : aspectRatio < 0.8 ? "portrait" : "square",
+        order: STATE.memories.length
+      };
+
+      STATE.memories.push(memory);
+      STATE.memoryCaptions[memory.id] = "";
+      STATE.memoryMoods[memory.id] = "Dịu dàng";
+
+      const btn = document.getElementById("btnToMeta");
+      btn.disabled = STATE.memories.length === 0 || STATE.pendingFiles > 0;
+      btn.textContent = STATE.pendingFiles > 0
+        ? "Đang xử lý ảnh..."
+        : `Tiếp theo (${STATE.memories.length} ảnh) →`;
+    };
+
+    img.onerror = () => {
+      STATE.pendingFiles = Math.max(0, STATE.pendingFiles - 1);
+      try { URL.revokeObjectURL(url); } catch(e){}
+      STATE.objectUrls.delete(url);
+      showToast(`Không thể đọc "${file.name}".`);
+      const btn = document.getElementById("btnToMeta");
+      btn.disabled = STATE.memories.length === 0 || STATE.pendingFiles > 0;
+      btn.textContent = STATE.pendingFiles > 0
+        ? "Đang xử lý ảnh..."
+        : STATE.memories.length
+          ? `Tiếp theo (${STATE.memories.length} ảnh) →`
+          : "Tiếp theo →";
+    };
+
+    img.src = url;
+  }
+
+  if(candidates.length > available){
+    showToast(`Chỉ nhận tối đa ${CONFIG.maxImages} ảnh.`);
+  }
+  fileInput.value = "";
+}
+
+
+document.getElementById("btnToMeta").onclick = () => {
+  if(STATE.pendingFiles > 0){
+    showToast("Đang xử lý ảnh, chờ một chút nhé...");
+    return;
+  }
+  if(!STATE.memories.length) return;
+  goTo("memory-meta", renderMemoryMeta);
+};
+
+/* ================= 11. MEMORY CAPTION & MOOD ================= */
+function renderMemoryMeta(){
+  const list = document.getElementById("metaList");
+  list.innerHTML = "";
+
+  if(!STATE.memories.length){
+    list.textContent = "Thiên hà vẫn đang chờ một vài ký ức của cậu...";
+    document.getElementById("btnToGalleryMeta").disabled = true;
+    return;
+  }
+
+  STATE.memories.forEach((m, i) => {
+    STATE.memoryCaptions[m.id] = STATE.memoryCaptions[m.id] || "";
+    STATE.memoryMoods[m.id] = STATE.memoryMoods[m.id] || "Dịu dàng";
+
+    const div = document.createElement("div");
+    div.className = "meta-item";
+    div.draggable = true;
+    div.dataset.id = m.id;
+    if(STATE.featuredMemoryId === m.id) div.classList.add("featured");
+
+    const img = document.createElement("img");
+    img.src = m.url;
+    img.className = "meta-thumb";
+    img.alt = `Ký ức ${i + 1}`;
+    img.title = "Chọn làm Featured Memory";
+
+    const inputs = document.createElement("div");
+    inputs.className = "meta-inputs";
+
+    const caption = document.createElement("input");
+    caption.type = "text";
+    caption.placeholder = "Nếu ký ức này là một câu chuyện...";
+    caption.value = STATE.memoryCaptions[m.id];
+    caption.className = "cap-in";
+
+    const mood = document.createElement("select");
+    mood.className = "mood-in";
+    [
+      ["Dịu dàng", "🌙 Dịu dàng"],
+      ["Ấm áp", "💗 Ấm áp"],
+      ["Vui vẻ", "✨ Vui vẻ"],
+      ["Hoài niệm", "🌌 Hoài niệm"],
+      ["Đáng yêu", "🤭 Đáng yêu"]
+    ].forEach(([value, label]) => {
+      const opt = document.createElement("option");
+      opt.value = value;
+      opt.textContent = label;
+      opt.selected = STATE.memoryMoods[m.id] === value;
+      mood.appendChild(opt);
+    });
+
+    inputs.append(caption, mood);
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "remove-memory";
+    remove.textContent = "Xóa";
+    remove.setAttribute("aria-label", `Xóa ${m.name}`);
+
+    img.onclick = () => {
+      STATE.featuredMemoryId = m.id;
+      document.querySelectorAll(".meta-item").forEach(el => el.classList.remove("featured"));
+      div.classList.add("featured");
+      showToast("Đã chọn làm Featured Memory ✨");
+    };
+
+    caption.oninput = e => {
+      STATE.memoryCaptions[m.id] = e.target.value.slice(0, 180);
+    };
+
+    mood.onchange = e => {
+      STATE.memoryMoods[m.id] = e.target.value;
+    };
+
+    remove.onclick = () => {
+      const index = STATE.memories.findIndex(item => item.id === m.id);
+      if(index < 0) return;
+      const removed = STATE.memories.splice(index, 1)[0];
+
+      if(STATE.featuredMemoryId === removed.id){
+        STATE.featuredMemoryId = STATE.memories[0]?.id || null;
+      }
+
+      renderMemoryMeta();
+      showToast("Đã xóa ký ức.", () => {
+        STATE.memories.splice(Math.min(index, STATE.memories.length), 0, removed);
+        if(!STATE.featuredMemoryId) STATE.featuredMemoryId = removed.id;
+        renderMemoryMeta();
+      }, 5000);
+    };
+
+    div.addEventListener("dragstart", e => {
+      e.dataTransfer.setData("text/plain", m.id);
+      e.dataTransfer.effectAllowed = "move";
+      div.style.opacity = "0.5";
+    });
+
+    div.addEventListener("dragend", () => { div.style.opacity = ""; });
+
+    div.addEventListener("dragover", e => {
+      e.preventDefault();
+      div.style.transform = "translateY(-3px) scale(1.01)";
+    });
+
+    div.addEventListener("dragleave", () => {
+      if(STATE.featuredMemoryId !== m.id) div.style.transform = "";
+    });
+
+    div.addEventListener("drop", e => {
+      e.preventDefault();
+      div.style.transform = "";
+      const fromId = e.dataTransfer.getData("text/plain");
+      if(!fromId || fromId === m.id) return;
+
+      const fromIndex = STATE.memories.findIndex(item => item.id === fromId);
+      const toIndex = STATE.memories.findIndex(item => item.id === m.id);
+      if(fromIndex < 0 || toIndex < 0) return;
+
+      const [moved] = STATE.memories.splice(fromIndex, 1);
+      STATE.memories.splice(toIndex, 0, moved);
+      STATE.memories.forEach((item, idx) => item.order = idx);
+      renderMemoryMeta();
+    });
+
+    div.append(img, inputs, remove);
+    list.appendChild(div);
+  });
+
+  document.getElementById("btnToGalleryMeta").disabled = false;
+  document.getElementById("btnToGalleryMeta").textContent = "Tạo Memory Board →";
+}
+
+document.getElementById("btnToGalleryMeta").onclick = () => {
+  const feat = STATE.memories.find(m => m.id === STATE.featuredMemoryId) || STATE.memories[0];
+  if(!feat) return;
+  goTo("featured", async () => {
+    showText("featText1");
+    const img = document.getElementById("featImg"); img.src = feat.url;
+    await wait(1000); img.style.opacity = 1; img.style.transform = "scale(1)";
+    const capStr = STATE.memoryCaptions[feat.id] || "Một ký ức nhỏ.";
+    const cap = document.getElementById("featCap"); cap.textContent = `"${capStr}"`;
+    await wait(1000); cap.style.opacity = 1;
+    await wait(1000); document.getElementById("btnFeatTransform").style.opacity = 1;
+  });
+};
+
+/* ================= 12. FEATURED TRANSFORM -> GALLERY -> GALAXY ================= */
+const transformedMap = new Set();
+document.getElementById("btnFeatTransform").onclick = () => {
+  const feat = STATE.memories.find(m => m.id === STATE.featuredMemoryId);
+  if(feat) transformedMap.add(feat.url);
+  goTo("transform", () => runImageParticleTransform(feat));
+};
+
+function runImageParticleTransform(mem){
+  /*
+   * V8.5 FUNCTIONAL TRANSFORM
+   * - Does not leave the user staring at a static label.
+   * - Uses Image.decode() when available and a timeout fallback.
+   * - Processes pixels in chunks so the main thread can breathe.
+   * - Shows a faint image preview while particles are being prepared.
+   * - Guarantees a finish path instead of an endless requestAnimationFrame.
+   */
+  const canvas = document.getElementById("tf-canvas");
+  const label = document.getElementById("tfLabel");
+
+  if(!canvas || !mem || !mem.url){
+    if(label) label.textContent = "Không có ký ức để tạo hiệu ứng.";
+    showToast("Không tìm thấy ảnh để tạo hiệu ứng.");
+    setTimeout(() => goTo("gallery", renderGallery, { force: true }), 900);
+    return;
+  }
+
+  cancelAnimationFrame(STATE.activeTransformRaf || 0);
+  STATE.activeTransformRaf = 0;
+
+  const profile = STATE.performanceProfile;
+  const dprLimit = profile === "high" ? 1.75 : profile === "medium" ? 1.5 : 1.2;
+  const dpr = Math.min(window.devicePixelRatio || 1, dprLimit);
+  const rect = canvas.getBoundingClientRect();
+  const w = Math.max(320, Math.round(rect.width || 640));
+  const h = Math.max(220, Math.round(rect.height || 360));
+  canvas.width = Math.max(1, Math.round(w * dpr));
+  canvas.height = Math.max(1, Math.round(h * dpr));
+
+  const ctx = canvas.getContext("2d", { alpha: true });
+  if(!ctx){
+    if(label) label.textContent = "Canvas không khả dụng trên trình duyệt này.";
+    showToast("Trình duyệt không hỗ trợ hiệu ứng ảnh.");
+    setTimeout(() => goTo("gallery", renderGallery, { force: true }), 1000);
+    return;
+  }
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.clearRect(0, 0, w, h);
+
+  if(label){
+    label.style.opacity = "1";
+    label.textContent = "Đang chuẩn bị ký ức...";
+  }
+
+  let ended = false;
+  let raf = 0;
+  let failTimer = 0;
+  const img = new Image();
+  img.decoding = "async";
+
+  const finishOnce = () => {
+    if(ended) return;
+    ended = true;
+    if(failTimer) clearTimeout(failTimer);
+    cancelAnimationFrame(raf);
+    STATE.activeTransformRaf = 0;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.clearRect(0, 0, w, h);
+  };
+
+  const failGracefully = (message) => {
+    if(ended) return;
+    finishOnce();
+    if(label) label.textContent = message || "Không thể tạo hiệu ứng cho ảnh này.";
+    showToast("Ảnh này không thể tạo hiệu ứng hạt sáng.");
+    window.setTimeout(() => {
+      if(STATE.chapter === "transform") {
+        goTo("gallery", renderGallery, { force: true });
+      }
+    }, 1400);
+  };
+
+  /* If the blob URL or decode pipeline stalls, never trap the user here forever. */
+  failTimer = window.setTimeout(() => {
+    failGracefully("Ảnh đang xử lý quá lâu — quay lại Memory Board...");
+  }, 12000);
+
+  img.onerror = () => failGracefully("Không thể đọc ảnh này.");
+
+  img.onload = async () => {
+    if(ended) return;
+
+    try{
+      if(img.decode){
+        try { await img.decode(); } catch(_err) { /* onload already gives us a usable image in most browsers */ }
+      }
+
+      if(ended) return;
+
+      const maxArea =
+        profile === "high" ? 1100000 :
+        profile === "medium" ? 720000 :
+        360000;
+
+      const sourceScale = Math.min(
+        (w * 0.78) / Math.max(1, img.naturalWidth || img.width),
+        (h * 0.72) / Math.max(1, img.naturalHeight || img.height),
+        Math.sqrt(maxArea / Math.max(1, (img.naturalWidth || img.width) * (img.naturalHeight || img.height)))
+      );
+
+      const imageW = Math.max(1, Math.round((img.naturalWidth || img.width) * sourceScale));
+      const imageH = Math.max(1, Math.round((img.naturalHeight || img.height) * sourceScale));
+      const offX = (w - imageW) * 0.5;
+      const offY = (h - imageH) * 0.5;
+
+      const off = document.createElement("canvas");
+      off.width = imageW;
+      off.height = imageH;
+      const octx = off.getContext("2d", { willReadFrequently: true });
+      if(!octx) throw new Error("Offscreen canvas unavailable");
+
+      octx.clearRect(0, 0, imageW, imageH);
+      octx.drawImage(img, 0, 0, imageW, imageH);
+
+      const data = octx.getImageData(0, 0, imageW, imageH).data;
+      const step = profile === "high" ? 3 : profile === "medium" ? 4 : 6;
+      const cap = profile === "high" ? 6200 : profile === "medium" ? 3400 : 1400;
+      const points = [];
+
+      /* Chunk pixel sampling so a large image does not freeze the browser. */
+      let y = 0;
+      const chunkRows = profile === "high" ? 26 : profile === "medium" ? 20 : 14;
+      const totalRows = Math.ceil(imageH / step);
+      let processedRows = 0;
+
+      const sampleChunk = (resume) => {
+        if(ended) return;
+
+        const maxY = Math.min(imageH, y + chunkRows * step);
+        for(; y < maxY; y += step){
+          for(let x = 0; x < imageW; x += step){
+            const index = (y * imageW + x) * 4;
+            const r = data[index];
+            const g = data[index + 1];
+            const b = data[index + 2];
+            const a = data[index + 3];
+            if(a < 45) continue;
+
+            const brightness = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
+            if(brightness < 0.02 && a < 135) continue;
+
+            points.push({
+              x,
+              y,
+              r,
+              g,
+              b,
+              a: a / 255
+            });
+          }
+        }
+
+        processedRows = Math.min(totalRows, Math.ceil(y / step));
+        if(label){
+          const pct = Math.min(99, Math.round((processedRows / Math.max(1, totalRows)) * 100));
+          label.textContent = `Đang gom những đốm sáng từ ký ức... ${pct}%`;
+        }
+
+        if(y < imageH){
+          requestAnimationFrame(() => sampleChunk(resume));
+          return;
+        }
+
+        const finalPoints = points.length > cap
+          ? points.filter((_, i) => i % Math.ceil(points.length / cap) === 0)
+          : points;
+
+        if(!finalPoints.length){
+          failGracefully("Không tìm thấy điểm sáng phù hợp trong ảnh.");
+          return;
+        }
+
+        startParticleAnimation(finalPoints, offX, offY, imageW, imageH);
+      };
+
+      const startParticleAnimation = (finalPoints, ox, oy, iw, ih) => {
+        if(ended) return;
+
+        const particles = finalPoints.map((p) => {
+          const angle = Math.random() * Math.PI * 2;
+          const startRadius = Math.min(w, h) * (0.04 + Math.random() * 0.07);
+
+          return {
+            x: w * 0.5 + Math.cos(angle) * startRadius,
+            y: h * 0.5 + Math.sin(angle) * startRadius,
+            tx: p.x + ox,
+            ty: p.y + oy,
+            vx: 0,
+            vy: 0,
+            color: `rgb(${p.r},${p.g},${p.b})`,
+            alpha: Math.max(0.5, Math.min(1, p.a)),
+            size: profile === "high"
+              ? 1.45 + Math.random() * 1.25
+              : profile === "medium"
+                ? 1.55 + Math.random() * 1.05
+                : 1.7 + Math.random() * 0.7,
+            orbitPhase: Math.random() * Math.PI * 2,
+            orbitSpeed: 0.0015 + Math.random() * 0.0025,
+            orbitRadius: Math.min(w, h) * (0.28 + Math.random() * 0.34),
+            scatterX: w * 0.5 + (Math.random() - 0.5) * w * 1.25,
+            scatterY: h * 0.5 + (Math.random() - 0.5) * h * 1.05
+          };
+        });
+
+        let phase = "FORM";
+        let phaseStart = performance.now();
+        let lastTs = phaseStart;
+
+        if(label) label.textContent = "Các đốm sáng đang tìm lại hình dáng của ký ức...";
+
+        const drawParticle = (p, ts, alphaMultiplier = 1) => {
+          const pulse = 1 + Math.sin(ts * 0.004 + p.orbitPhase) * 0.09;
+          const radius = Math.max(0.9, p.size * pulse);
+          const alpha = Math.max(0, Math.min(1, p.alpha * alphaMultiplier));
+
+          if(profile !== "low"){
+            ctx.globalAlpha = alpha * 0.11;
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, radius * 3.1, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+          ctx.fill();
+        };
+
+        const drawFaintSource = (alpha) => {
+          ctx.globalCompositeOperation = "source-over";
+          ctx.globalAlpha = alpha;
+          ctx.drawImage(img, ox, oy, iw, ih);
+          ctx.globalAlpha = 1;
+          ctx.globalCompositeOperation = "lighter";
+        };
+
+        const frame = (ts) => {
+          if(ended || STATE.chapter !== "transform"){
+            finishOnce();
+            return;
+          }
+
+          const delta = Math.min(32, ts - lastTs);
+          lastTs = ts;
+          const elapsed = ts - phaseStart;
+
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          ctx.clearRect(0, 0, w, h);
+          ctx.globalCompositeOperation = "lighter";
+
+          if(phase === "FORM" || phase === "GLOW"){
+            /* Keep a very faint source image under the particle construction. */
+            drawFaintSource(
+              phase === "FORM"
+                ? 0.13
+                : Math.max(0.035, 0.13 - (elapsed / 1600) * 0.095)
+            );
+
+            let settled = true;
+            for(const p of particles){
+              const dx = p.tx - p.x;
+              const dy = p.ty - p.y;
+              p.vx += dx * 0.055 * Math.min(1.5, delta / 16.67);
+              p.vy += dy * 0.055 * Math.min(1.5, delta / 16.67);
+              p.vx *= 0.80;
+              p.vy *= 0.80;
+              p.x += p.vx;
+              p.y += p.vy;
+              if(Math.abs(dx) > 1.8 || Math.abs(dy) > 1.8) settled = false;
+              drawParticle(p, ts, phase === "GLOW" ? 0.98 : 1);
+            }
+
+            if(phase === "FORM" && (settled || elapsed > 1500)){
+              phase = "GLOW";
+              phaseStart = ts;
+              if(label) label.textContent = "Ký ức đã hiện ra bằng ánh sáng... ✨";
+            }else if(phase === "GLOW" && elapsed > 1800){
+              phase = "DISSOLVE";
+              phaseStart = ts;
+              if(label) label.textContent = "Từng đốm sáng đang tách khỏi ký ức...";
+            }
+          }
+
+          if(phase === "DISSOLVE"){
+            const progress = Math.min(1, elapsed / 1900);
+            for(const p of particles){
+              const dx = p.scatterX - p.x;
+              const dy = p.scatterY - p.y;
+              p.vx += dx * 0.014;
+              p.vy += dy * 0.014;
+              p.vx *= 0.945;
+              p.vy *= 0.945;
+              p.x += p.vx;
+              p.y += p.vy;
+              drawParticle(p, ts, Math.max(0.08, 1 - progress * 1.05));
+            }
+            if(progress >= 1){
+              phase = "ORBIT";
+              phaseStart = ts;
+              if(label) label.textContent = "Ký ức đang hòa vào thiên hà...";
+            }
+          }
+
+          if(phase === "ORBIT"){
+            const progress = Math.min(1, elapsed / 1750);
+            for(const p of particles){
+              p.orbitPhase += p.orbitSpeed * Math.max(0.7, delta / 16.67);
+              const targetX = w * 0.5 + Math.cos(p.orbitPhase) * p.orbitRadius;
+              const targetY = h * 0.5 + Math.sin(p.orbitPhase) * p.orbitRadius * 0.55;
+              p.vx += (targetX - p.x) * 0.008;
+              p.vy += (targetY - p.y) * 0.008;
+              p.vx *= 0.965;
+              p.vy *= 0.965;
+              p.x += p.vx;
+              p.y += p.vy;
+              drawParticle(p, ts, 0.85 - progress * 0.2);
+            }
+
+            if(progress >= 1){
+              finishOnce();
+              goTo("gallery", renderGallery, { force: true });
+              return;
+            }
+          }
+
+          ctx.globalAlpha = 1;
+          ctx.globalCompositeOperation = "source-over";
+          raf = requestAnimationFrame(frame);
+          STATE.activeTransformRaf = raf;
+        };
+
+        raf = requestAnimationFrame(frame);
+        STATE.activeTransformRaf = raf;
+      };
+
+      sampleChunk();
+
+    }catch(error){
+      console.error("Image particle transform failed:", error);
+      failGracefully("Có lỗi khi biến ảnh thành ánh sáng.");
+    }
+  };
+
+  img.src = mem.url;
+
+  /* The browser can keep onload silent for a bad/stale blob URL in some edge cases. */
+  if(typeof img.decode === "function"){
+    img.decode().catch(() => { /* onload/onerror owns the final decision */ });
+  }
+}
+
+function renderGallery(){
+  const g = document.getElementById("gallery");
+  g.innerHTML = "";
+
+  if(!STATE.memories.length){
+    const empty = document.createElement("p");
+    empty.className = "galaxy-note";
+    empty.textContent = "Thiên hà này vẫn đang chờ một vài ký ức của cậu...";
+    g.appendChild(empty);
+    return;
+  }
+
+  STATE.memories.forEach((m, i) => {
+    const c = document.createElement("div");
+    c.className = `memcard ${m.aspect}`;
+    c.tabIndex = 0;
+    c.setAttribute("role", "button");
+    c.setAttribute("aria-label", `Xem ký ức ${i + 1}`);
+
+    const img = document.createElement("img");
+    img.src = m.url;
+    img.loading = "lazy";
+    img.alt = STATE.memoryCaptions[m.id] || `Ký ức ${i + 1}`;
+
+    const cap = document.createElement("div");
+    cap.className = "cap";
+    cap.textContent = STATE.memoryCaptions[m.id] || `Ký ức #${i+1}`;
+
+    c.append(img, cap);
+
+    const open = () => {
+      transformedMap.add(m.url);
+      c.style.opacity = "0.55";
+      goTo("transform", () => runImageParticleTransform(m));
+    };
+
+    c.addEventListener("click", open);
+    c.addEventListener("keydown", e => {
+      if(e.key === "Enter" || e.key === " "){
+        e.preventDefault();
+        open();
+      }
+    });
+
+    if(transformedMap.has(m.url)) c.style.opacity = "0.55";
+    g.appendChild(c);
+  });
+}
+
+document.getElementById("btnToGalaxyBoard").onclick = () => goTo("galaxy", renderGalaxyCanvas);
+
+/* ================= 13. GALAXY V7 ================= */
+let galaxyRaf, memStars = [];
+function renderGalaxyCanvas(){
+  const canvas = document.getElementById("galaxyCanvas");
+  const ctx = canvas.getContext("2d");
+  const dpr = Math.min(window.devicePixelRatio || 1, STATE.performanceProfile === "high" ? 1.75 : 1.35);
+  const rect = canvas.getBoundingClientRect();
+  const w = Math.max(320, Math.round(rect.width || 600));
+  const h = Math.max(240, Math.round(rect.height || 400));
+
+  cancelAnimationFrame(galaxyRaf);
+  canvas.width = Math.round(w*dpr);
+  canvas.height = Math.round(h*dpr);
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.scale(dpr,dpr);
+
+  const cx = w/2, cy = h/2;
+  const interaction = { x: cx, y: cy, active: false, down: false };
+
+  if(STATE.secretPositions.length !== 3 || STATE.secretPositions.some(p => p.w !== Math.round(w) || p.h !== Math.round(h))){
+    STATE.secretPositions = Array.from({length: 3}, (_, idx) => ({
+      x: w * (0.18 + idx*0.31) + (idx===1 ? 0 : (idx===0 ? -8 : 8)),
+      y: h * (0.22 + ((idx*0.27)%0.56)),
+      r: 8,
+      w: Math.round(w),
+      h: Math.round(h),
+      phase: Math.random()*Math.PI*2
+    }));
+  }
+
+  memStars = STATE.memories.map((m, i) => {
+    const angle = (i/Math.max(STATE.memories.length,1))*Math.PI*2 - Math.PI/2;
+    const dist = Math.min(w,h) * (STATE.memories.length <= 2 ? 0.22 : 0.30) *
+      (0.82 + 0.18*Math.sin(i*1.7));
+    const mood = STATE.memoryMoods[m.id] || "Dịu dàng";
+
+    let col = "#ffd9a0", spd = 0.0025;
+    if(mood === "Ấm áp"){ col="#ff9a9e"; spd=0.0034; }
+    else if(mood === "Vui vẻ"){ col="#a18cd1"; spd=0.0048; }
+    else if(mood === "Hoài niệm"){ col="#84a8ff"; spd=0.0018; }
+    else if(mood === "Đáng yêu"){ col="#fbc2eb"; spd=0.004; }
+
+    return {
+      x: cx + Math.cos(angle)*dist,
+      y: cy + Math.sin(angle)*dist,
+      r: m.id === STATE.featuredMemoryId ? 16 : 12,
+      url: m.url,
+      id: m.id,
+      idx: i,
+      cap: STATE.memoryCaptions[m.id] || `Ký ức #${i+1}`,
+      angle,
+      dist,
+      orbitSpeed: STATE.reducedMotion ? spd*0.25 : spd,
+      color: col,
+      pulse: Math.random()*Math.PI*2
+    };
+  });
+
+  function pointerToCanvas(e){
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX-r.left, y: e.clientY-r.top };
+  }
+
+  const updateInteraction = (e) => {
+    const p = pointerToCanvas(e);
+    interaction.x = p.x;
+    interaction.y = p.y;
+    interaction.active = true;
+  };
+
+  canvas.onpointermove = updateInteraction;
+  canvas.onpointerleave = () => { interaction.active = false; interaction.down = false; };
+  canvas.onpointercancel = () => { interaction.active = false; interaction.down = false; };
+  canvas.onpointerdown = e => {
+    interaction.down = true;
+    updateInteraction(e);
+  };
+  canvas.onpointerup = () => { interaction.down = false; };
+
+  function hitMemory(x, y){
+    for(const star of memStars){
+      if(Math.hypot(x-star.x, y-star.y) <= star.r + 15) return star;
+    }
+    return null;
+  }
+
+  canvas.onclick = e => {
+    const {x,y} = pointerToCanvas(e);
+    const hit = hitMemory(x,y);
+    if(hit){
+      openMemoryModal(hit);
+      return;
+    }
+
+    for(let idx=0; idx<STATE.secretPositions.length; idx++){
+      const ss = STATE.secretPositions[idx];
+      if(STATE.discoveredSecrets.includes(idx)) continue;
+      if(Math.hypot(x-ss.x, y-ss.y) <= ss.r + 22){
+        STATE.discoveredSecrets.push(idx);
+        STATE.secretClicks++;
+
+        if(STATE.secretClicks >= CONFIG.secret.requiredClicks){
+          const body = document.getElementById("modalSecretBody");
+          body.innerHTML = "";
+          const title = document.createElement("h2");
+          title.textContent = "Bí mật ✨";
+          const p = document.createElement("p");
+          p.textContent = CONFIG.secret.message;
+          const close = document.createElement("button");
+          close.className = "ghost";
+          close.textContent = "Đóng";
+          close.onclick = () => document.getElementById("modalSecret").classList.remove("open");
+          body.append(title, p, close);
+          document.getElementById("modalSecret").classList.add("open");
+        }else{
+          showToast(`Ồ... cậu tìm thấy một bí mật ${STATE.secretClicks}/${CONFIG.secret.requiredClicks}`);
+        }
+        return;
+      }
+    }
+  };
+
+  function updateGalaxy(ts){
+    ctx.clearRect(0,0,w,h);
+
+    const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.min(w,h)*0.55);
+    gradient.addColorStop(0, "rgba(120,80,180,0.16)");
+    gradient.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0,0,w,h);
+
+    // subtle orbit ring
+    ctx.strokeStyle = "rgba(240,166,200,0.08)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, Math.min(w,h)*0.30, 0, Math.PI*2);
+    ctx.stroke();
+
+    for(let i=0; i<memStars.length; i++){
+      for(let j=i+1; j<memStars.length; j++){
+        const a = memStars[i], b = memStars[j];
+        if(Math.hypot(a.x-b.x,a.y-b.y) < 150){
+          ctx.strokeStyle = "rgba(240,166,200,0.10)";
+          ctx.beginPath();
+          ctx.moveTo(a.x,a.y);
+          ctx.lineTo(b.x,b.y);
+          ctx.stroke();
+        }
+      }
+    }
+
+    memStars.forEach(star => {
+      if(!STATE.reducedMotion){
+        star.angle += star.orbitSpeed;
+      }
+      let tx = cx + Math.cos(star.angle)*star.dist;
+      let ty = cy + Math.sin(star.angle)*star.dist;
+
+      if(interaction.active){
+        const distToPointer = Math.hypot(interaction.x-star.x, interaction.y-star.y);
+        if(distToPointer < 150){
+          const force = (1 - distToPointer/150) * 0.35;
+          tx += (star.x-interaction.x) * force;
+          ty += (star.y-interaction.y) * force;
+        }
+      }
+
+      star.x += (tx-star.x) * 0.045;
+      star.y += (ty-star.y) * 0.045;
+      star.pulse += 0.025;
+
+      const pulse = 1 + Math.sin(star.pulse) * 0.06;
+      const radius = star.r * pulse;
+
+      ctx.shadowColor = star.color;
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = star.color;
+      ctx.beginPath();
+      ctx.arc(star.x, star.y, radius, 0, Math.PI*2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = "#f4f0fb";
+      ctx.font = "10px Inter, sans-serif";
+      ctx.textAlign = "center";
+      ctx.globalAlpha = 0.72;
+      ctx.fillText(star.cap.slice(0, 14), star.x, star.y + radius + 13);
+      ctx.globalAlpha = 1;
+    });
+
+    STATE.secretPositions.forEach((ss, idx) => {
+      if(STATE.discoveredSecrets.includes(idx)) return;
+      const pulse = 1 + Math.sin(ts/450 + ss.phase)*0.25;
+      ctx.fillStyle = "rgba(255,255,255,0.55)";
+      ctx.shadowColor = "#ffd9a0";
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(ss.x, ss.y, ss.r*pulse, 0, Math.PI*2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    });
+
+    galaxyRaf = requestAnimationFrame(updateGalaxy);
+  }
+
+  galaxyRaf = requestAnimationFrame(updateGalaxy);
+}
+function openMemoryModal(star){
+  const body = document.getElementById("modalSecretBody");
+  body.innerHTML = "";
+
+  const img = document.createElement("img");
+  img.src = star.url;
+  img.alt = star.cap || `Ký ức ${star.idx + 1}`;
+  img.style.maxWidth = "100%";
+  img.style.maxHeight = "55vh";
+  img.style.borderRadius = "14px";
+  img.style.objectFit = "contain";
+
+  const cap = document.createElement("p");
+  cap.className = "italic";
+  cap.textContent = star.cap;
+
+  const count = document.createElement("p");
+  count.className = "galaxy-note";
+  count.textContent = `${star.idx + 1} / ${memStars.length}`;
+
+  const row = document.createElement("div");
+  row.className = "row";
+
+  const prev = document.createElement("button");
+  prev.className = "ghost";
+  prev.textContent = "← Trước";
+  prev.disabled = memStars.length < 2;
+
+  const next = document.createElement("button");
+  next.className = "ghost";
+  next.textContent = "Sau →";
+  next.disabled = memStars.length < 2;
+
+  const close = document.createElement("button");
+  close.className = "ghost";
+  close.textContent = "Đóng";
+
+  const renderIndex = (nextIndex) => {
+    const normalized = (nextIndex + memStars.length) % memStars.length;
+    openMemoryModal(memStars[normalized]);
+  };
+
+  prev.onclick = () => renderIndex(star.idx - 1);
+  next.onclick = () => renderIndex(star.idx + 1);
+  close.onclick = () => document.getElementById("modalSecret").classList.remove("open");
+
+  row.append(prev, next, close);
+  body.append(img, cap, count, row);
+  document.getElementById("modalSecret").classList.add("open");
+}
+
+document.getElementById("btnRandomMem").onclick = () => {
+  if(memStars.length > 0) openMemoryModal(memStars[Math.floor(Math.random() * memStars.length)]);
+};
+document.getElementById("btnGalaxyNext").onclick = () => {
+  cancelAnimationFrame(galaxyRaf); goTo("timeline", renderTimeline);
+};
+
+/* ================= 14. TIMELINE ================= */
+function renderTimeline(){
+  const cont = document.getElementById("timelineCont");
+  cont.innerHTML = "";
+
+  if(!Array.isArray(CONFIG.timeline) || CONFIG.timeline.length === 0){
+    cont.innerHTML = "";
+    goTo("constellation", initConstellation);
+    return;
+  }
+
+  CONFIG.timeline.forEach((tl, i) => {
+    const d = document.createElement("div");
+    d.className = "tl-item";
+
+    const title = document.createElement("div");
+    title.className = "tl-title";
+    title.textContent = tl.title || `Ký ức ${i+1}`;
+
+    const text = document.createElement("div");
+    text.className = "tl-text";
+    text.textContent = tl.text || "";
+
+    d.append(title, text);
+
+    if(tl.memoryIdx !== undefined && STATE.memories[tl.memoryIdx]){
+      d.addEventListener("click", () => {
+        const mem = STATE.memories[tl.memoryIdx];
+        const starIndex = memStars.findIndex(star => star.id === mem.id);
+        openMemoryModal(starIndex >= 0 ? memStars[starIndex] : {
+          idx: tl.memoryIdx,
+          url: mem.url,
+          cap: STATE.memoryCaptions[mem.id] || "Ký ức"
+        });
+      });
+    }
+
+    cont.appendChild(d);
+    setTimeout(() => d.classList.add("show"), 200 + i*280);
+  });
+}
+
+document.getElementById("btnToConstellation").onclick = () => goTo("constellation", initConstellation);
+document.getElementById("btnContinueConstellation").onclick = () => {
+  cancelAnimationFrame(STATE.constellationRaf);
+  STATE.constellationRaf = 0;
+  goTo("capsule");
+};
+
+/* ================= 15. CONSTELLATION ================= */
+function initConstellation(){
+  const canvas = document.getElementById("constellation-canvas");
+  const ctx = canvas.getContext("2d");
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const rect = canvas.getBoundingClientRect();
+  const w = Math.max(320, Math.round(rect.width || 600));
+  const h = Math.max(260, Math.round(rect.height || 360));
+
+  cancelAnimationFrame(STATE.constellationRaf);
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+
+  // 12 điểm đi theo đường cong trái tim, không phải đa giác thô.
+  const points = [];
+  const cx = w / 2;
+  const cy = h / 2 + h * 0.03;
+  const scale = Math.min(w * 0.0195, h * 0.0135);
+  const total = 12;
+
+  for(let i = 0; i < total; i++){
+    const t = (Math.PI * 2 * i) / total;
+    const sx = 16 * Math.pow(Math.sin(t), 3);
+    const sy = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+    points.push({
+      x: cx + sx * scale,
+      y: cy - sy * scale
+    });
+  }
+
+  let connected = 0;
+  let pulseRaf = 0;
+  let completed = false;
+  STATE.constellationProgress = 0;
+
+  const continueBtn = document.getElementById("btnContinueConstellation");
+  if(continueBtn){
+    continueBtn.style.display = "none";
+    continueBtn.style.opacity = "0";
+    continueBtn.style.transform = "translateY(8px)";
+    continueBtn.style.pointerEvents = "none";
+  }
+
+  const heartGradient = () => {
+    const g = ctx.createLinearGradient(0, h * 0.1, w, h * 0.9);
+    g.addColorStop(0, "#ff9fbe");
+    g.addColorStop(0.35, "#ff4f86");
+    g.addColorStop(0.7, "#ff315e");
+    g.addColorStop(1, "#ffb36e");
+    return g;
+  };
+
+  function hitTest(point, x, y, radius = 42){
+    return Math.hypot(x - point.x, y - point.y) <= radius;
+  }
+
+  function pointerPos(e){
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  function drawGuide(ts){
+    const pulse = 0.08 + (Math.sin(ts * 0.0024) + 1) * 0.025;
+
+    ctx.clearRect(0, 0, w, h);
+
+    // Nền galaxy nhỏ riêng cho khung trái tim.
+    const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.min(w, h) * 0.58);
+    bg.addColorStop(0, "rgba(255,55,110,.10)");
+    bg.addColorStop(0.45, "rgba(255,90,135,.045)");
+    bg.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, w, h);
+
+    // Hướng dẫn mờ — để người chơi biết hình trái tim nằm ở đâu.
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for(let i = 1; i <= points.length; i++){
+      const p = points[i % points.length];
+      ctx.lineTo(p.x, p.y);
+    }
+    ctx.closePath();
+    ctx.strokeStyle = `rgba(255,120,165,${pulse})`;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 8]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Vẽ phần đã hoàn thành với 2 lớp glow.
+    if(connected > 0){
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for(let i = 1; i <= connected; i++){
+        ctx.lineTo(points[Math.min(i, points.length - 1)].x, points[Math.min(i, points.length - 1)].y);
+      }
+
+      ctx.strokeStyle = "rgba(255,50,105,.22)";
+      ctx.lineWidth = 10;
+      ctx.shadowColor = "rgba(255,44,106,.35)";
+      ctx.shadowBlur = 24;
+      ctx.stroke();
+
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = heartGradient();
+      ctx.lineWidth = 3.1;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.stroke();
+    }
+
+    // Các điểm sao.
+    // ================= POINT STYLE — HEART CONSTELLATION =================
+  points.forEach((pt, i) => {
+    const active = i < connected;
+    const target = i === connected && !completed;
+
+    // Vòng pulse nhỏ cho điểm kế tiếp.
+    const ring = target
+      ? 9 + Math.sin(ts * 0.0065) * 2
+      : 0;
+
+    /*
+    * Quan trọng:
+    * - Điểm nhìn trên màn hình được làm nhỏ lại.
+    * - Vùng hitTest vẫn giữ 42px ở bên dưới,
+    *   nên người dùng không cần chạm chính xác tuyệt đối.
+    */
+
+    // ===== SOFT HALO =====
+    if(active || target){
+      const haloRadius = active ? 6 : ring;
+
+      const halo = ctx.createRadialGradient(
+        pt.x,
+        pt.y,
+        0,
+        pt.x,
+        pt.y,
+        haloRadius
+      );
+
+      if(active){
+        halo.addColorStop(0, "rgba(255, 95, 145, 0.42)");
+        halo.addColorStop(0.45, "rgba(255, 65, 120, 0.16)");
+        halo.addColorStop(1, "rgba(255, 65, 120, 0)");
+      }else{
+        halo.addColorStop(0, "rgba(255, 225, 235, 0.32)");
+        halo.addColorStop(0.55, "rgba(255, 180, 205, 0.10)");
+        halo.addColorStop(1, "rgba(255, 180, 205, 0)");
+      }
+
+      ctx.fillStyle = halo;
+      ctx.globalAlpha = active ? 0.9 : 0.75;
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, haloRadius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // ===== CORE DOT =====
+    ctx.globalAlpha = 1;
+
+    const coreRadius = active
+      ? 2.4
+      : target
+        ? 2.7
+        : 2.0;
+
+    ctx.fillStyle = active
+      ? "#ff8db0"
+      : target
+        ? "#fff3f7"
+        : "rgba(255, 226, 237, 0.88)";
+
+    ctx.shadowColor = active
+      ? "rgba(255, 55, 110, 0.72)"
+      : "rgba(255, 170, 195, 0.45)";
+
+    ctx.shadowBlur = active
+      ? 9
+      : target
+        ? 8
+        : 5;
+
+    ctx.beginPath();
+    ctx.arc(
+      pt.x,
+      pt.y,
+      coreRadius,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  });
+
+    if(!completed){
+      pulseRaf = requestAnimationFrame(drawGuide);
+      STATE.constellationRaf = pulseRaf;
+    }
+  }
+
+  canvas.onpointerdown = e => {
+    if(completed) return;
+    e.preventDefault();
+    const {x, y} = pointerPos(e);
+    const target = points[connected];
+    if(!target) return;
+
+    if(hitTest(target, x, y, 42)){
+      connected++;
+      STATE.constellationProgress = connected;
+
+      if(connected >= points.length){
+        completed = true;
+        cancelAnimationFrame(pulseRaf);
+
+        // Trạng thái hoàn thành: giữ nguyên trái tim trên màn hình.
+        function finishHeart(ts){
+          ctx.clearRect(0, 0, w, h);
+          const breathe = 1 + Math.sin(ts * 0.005) * 0.035;
+
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.scale(breathe, breathe);
+          ctx.translate(-cx, -cy);
+
+          ctx.beginPath();
+          ctx.moveTo(points[0].x, points[0].y);
+          for(let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+          ctx.closePath();
+
+          ctx.strokeStyle = "rgba(255,40,95,.24)";
+          ctx.lineWidth = 18;
+          ctx.shadowColor = "rgba(255,55,105,.4)";
+          ctx.shadowBlur = 36;
+          ctx.stroke();
+
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = heartGradient();
+          ctx.lineWidth = 4;
+          ctx.stroke();
+
+          ctx.fillStyle = "rgba(255,100,145,.07)";
+          ctx.fill();
+          ctx.restore();
+
+          if(!STATE.reducedMotion){
+            STATE.constellationRaf = requestAnimationFrame(finishHeart);
+          }
+        }
+
+        finishHeart(performance.now());
+        showToast("Cậu vừa tự vẽ nên một trái tim của riêng mình. 💗", null, 3200);
+
+        // Không tự chuyển trang. Giữ trái tim hoàn chỉnh cho đến khi người dùng bấm tiếp tục.
+        const continueBtn = document.getElementById("btnContinueConstellation");
+        if(continueBtn){
+          continueBtn.style.display = "inline-flex";
+          requestAnimationFrame(() => {
+            continueBtn.style.opacity = "1";
+            continueBtn.style.transform = "translateY(0)";
+            continueBtn.style.pointerEvents = "auto";
+          });
+        }
+      }
+    }else{
+      // Sai điểm: chỉ rung nhẹ, không làm mất tiến trình.
+      canvas.animate([
+        { transform: "translateX(0)" },
+        { transform: "translateX(-5px)" },
+        { transform: "translateX(5px)" },
+        { transform: "translateX(0)" }
+      ], { duration: 220, easing: "ease-out" });
+    }
+  };
+
+  drawGuide(performance.now());
+}
+
+/* ================= 16. TIME CAPSULE ================= */
+const capsule = document.getElementById("timeCapsuleBox");
+capsule.onclick = () => {
+  if(STATE.timeCapsuleOpened) return;
+  STATE.timeCapsuleOpened = true;
+  capsule.classList.add("opened");
+  const msg = document.getElementById("capsuleMsg");
+  msg.textContent = CONFIG.timeCapsule.message || "Một lời nhắn nhỏ dành riêng cho cậu.";
+  msg.classList.add("show");
+  setTimeout(() => {
+    if(STATE.chapter !== "capsule") return;
+    const btn = document.getElementById("btnToLetter");
+    btn.style.opacity = 1;
+    btn.style.pointerEvents = "auto";
+  }, 1800);
+};
+document.getElementById("btnToLetter").onclick = () => goTo("letter", startLetter);
+
+/* ================= 17. LETTER & VOICE ================= */
+const TypingEngine = {
+  timer: null, full: "", box: null, i: 0,
+  start(text, containerId){ this.full = fill(text); this.box = document.getElementById(containerId); this.box.innerHTML = ""; this.i = 0; clearTimeout(this.timer); this.step(); },
+  step(){ this.box.textContent = this.full.slice(0, this.i); this.box.innerHTML += '<span class="caret">&nbsp;</span>'; this.i++; if(this.i<=this.full.length) this.timer = setTimeout(()=>this.step(), 35); },
+  skip(){ clearTimeout(this.timer); this.box.textContent = this.full; }, destroy(){ clearTimeout(this.timer); }
+};
+function startLetter(){
+  TypingEngine.start(CONFIG.letter, "letterBox");
+  if(CONFIG.voiceMessage.enabled) document.getElementById("btnToVoice").style.display = "inline-flex";
+}
+document.getElementById("btnLetterSkip").onclick = () => TypingEngine.skip();
+document.getElementById("btnToVoice").onclick = () => { TypingEngine.destroy(); goTo("voice"); };
+document.getElementById("btnToFinalGalaxy").onclick = () => { TypingEngine.destroy(); triggerFinalSequence(); };
+
+document.getElementById("btnPlayVoice").onclick = () => {
+  if(!CONFIG.voiceMessage?.source) return;
+  STATE.voiceMessagePlayed = true;
+  AudioManager.playVoice(CONFIG.voiceMessage.source);
+  showToast("Đang phát lời nhắn...");
+};
+document.getElementById("btnFromVoiceToFinal").onclick = () => triggerFinalSequence();
+
+/* ================= 18. FINAL SEQUENCE & EXPLOSION ================= */
+function triggerFinalSequence(){
+  goTo("final-confession", async () => {
+    showText("fc1"); await wait(2000);
+    showText("fc2"); await wait(2500);
+    showText("fc3"); await wait(2000);
+    document.getElementById("btnFinalExplode").style.opacity = 1;
+  });
+}
+
+document.getElementById("btnFinalExplode").onclick = () => {
+  goTo("final", triggerCosmicExplosion);
+};
+
+function triggerCosmicExplosion(){
+  const canvas = document.getElementById("fxCanvas");
+  const ctx = canvas.getContext("2d");
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+
+  cancelAnimationFrame(STATE.finalRaf);
+  canvas.width = Math.round(window.innerWidth*dpr);
+  canvas.height = Math.round(window.innerHeight*dpr);
+  canvas.style.width = window.innerWidth + "px";
+  canvas.style.height = window.innerHeight + "px";
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.scale(dpr,dpr);
+
+  const cx = window.innerWidth/2;
+  const cy = window.innerHeight/2;
+  const count = STATE.performanceProfile === "low" ? 120 : STATE.performanceProfile === "medium" ? 190 : 260;
+
+  const particles = Array.from({ length: count }, () => {
+    const angle = Math.random()*Math.PI*2;
+    const speed = Math.random()*7+2;
+    return {
+      x: cx,
+      y: cy,
+      vx: Math.cos(angle)*speed,
+      vy: Math.sin(angle)*speed,
+      life: 1,
+      color: `hsl(${Math.random()*70+320}, 90%, 78%)`,
+      size: Math.random()*2.6+1.4
+    };
+  });
+
+  function animate(){
+    ctx.clearRect(0,0,window.innerWidth,window.innerHeight);
+    let alive = false;
+
+    particles.forEach(p => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vx *= 0.992;
+      p.vy = p.vy * 0.992 + 0.04;
+      p.life -= 0.014;
+
+      if(p.life > 0){
+        alive = true;
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
+        ctx.fill();
+      }
+    });
+
+    ctx.globalAlpha = 1;
+    if(alive) STATE.finalRaf = requestAnimationFrame(animate);
+    else ctx.clearRect(0,0,window.innerWidth,window.innerHeight);
+  }
+
+  STATE.finalRaf = requestAnimationFrame(animate);
+}
+
+document.getElementById("btnOneLastStar").onclick = () => {
+  triggerCosmicExplosion();
+  document.getElementById("modalSecretBody").innerHTML = `<h2>✨ One Last Star ✨</h2><p class="italic" style="margin-top:0.6rem;">"Tớ thích cậu. Thật đấy. Cảm ơn vì đã xuất hiện và tỏa sáng rực rỡ nhất trong vũ trụ của tớ."</p><button class="ghost" id="msCloseFinal" style="margin-top:1rem;">Đóng lại ✨</button>`;
+  document.getElementById("msCloseFinal").onclick = () => document.getElementById("modalSecret").classList.remove("open");
+  document.getElementById("modalSecret").classList.add("open");
+};
+
+document.getElementById("btnBackToGalaxy").onclick = () => goTo("galaxy", renderGalaxyCanvas);
+
+/* ================= QR SHARE ================= */
+const qrModal = document.getElementById("qrModal");
+const qrCanvas = document.getElementById("qrCanvas");
+const qrUrl = document.getElementById("qrUrl");
+const qrHint = document.getElementById("qrHint");
+const qrClose = document.getElementById("qrClose");
+const qrCopy = document.getElementById("qrCopy");
+const btnShareQR = document.getElementById("btnShareQR");
+
+function getShareTarget(){
+  const configured = String(CONFIG.shareUrl || "").trim();
+  return configured || window.location.href;
+}
+
+function openQRCode(){
+  if(!qrModal || !qrCanvas) return;
+  const url = getShareTarget();
+  qrCanvas.innerHTML = "";
+  qrUrl.textContent = url;
+
+  const localFile = window.location.protocol === "file:" && !String(CONFIG.shareUrl || "").trim();
+  qrHint.textContent = localFile
+    ? "⚠️ Đây đang là file cục bộ. Để điện thoại quét và mở được, hãy đưa website lên một URL công khai rồi điền URL đó vào CONFIG.shareUrl."
+    : "Mã QR này chứa đúng URL đang được đặt trong shareUrl / địa chỉ hiện tại.";
+
+  if(typeof QRCode !== "function") {
+    qrCanvas.innerHTML = '<div style="color:#2b1b2a;font:600 14px Inter,system-ui,sans-serif;text-align:center;padding:1rem;">Không tải được thư viện QR.<br>Hãy mở trang khi có Internet rồi thử lại.</div>';
+  } else {
+    new QRCode(qrCanvas, {
+      text: url,
+      width: 220,
+      height: 220,
+      colorDark: "#111111",
+      colorLight: "#ffffff",
+      correctLevel: QRCode.CorrectLevel.H
+    });
+  }
+
+  qrModal.classList.add("open");
+  qrModal.setAttribute("aria-hidden", "false");
+}
+
+function closeQRCode(){
+  if(!qrModal) return;
+  qrModal.classList.remove("open");
+  qrModal.setAttribute("aria-hidden", "true");
+}
+
+async function copyShareTarget(){
+  const url = getShareTarget();
+  try{
+    if(navigator.clipboard && window.isSecureContext){
+      await navigator.clipboard.writeText(url);
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = url;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+    }
+    showToast("Đã sao chép địa chỉ thiên hà ✨");
+  } catch(e) {
+    showToast("Không thể sao chép tự động. Cậu có thể bôi đen địa chỉ rồi sao chép.");
+  }
+}
+
+if(btnShareQR) btnShareQR.onclick = openQRCode;
+if(qrClose) qrClose.onclick = closeQRCode;
+if(qrCopy) qrCopy.onclick = copyShareTarget;
+if(qrModal){
+  qrModal.addEventListener("click", e => { if(e.target === qrModal) closeQRCode(); });
+}
+document.addEventListener("keydown", e => { if(e.key === "Escape") closeQRCode(); });
+
+/* ================= 19. SETTINGS & RESET ================= */
+const btnSettings = document.getElementById("btnSettings"), settingsBody = document.getElementById("settingsBody");
+btnSettings.onclick = () => settingsBody.classList.toggle("open");
+document.getElementById("volRange").oninput = e => AudioManager.setVolume(e.target.value/100);
+document.getElementById("muteCheck").onchange = e => {
+  AudioManager.setMute(e.target.checked);
+  const indicator = document.getElementById("musicLiveIndicator");
+  if(indicator) indicator.textContent = e.target.checked ? "♪ Đã tắt" : "♪ Đang phát";
+};
+document.getElementById("motionCheck").onchange = e => STATE.reducedMotion = e.target.checked;
+// V8.6: chất lượng luôn khóa ở HIGH, không còn checkbox chuyển High/Medium.
+STATE.performanceProfile = "high";
+
+function resetExperience(){
+  STATE.transitionToken++;
+  STATE.isTransitioning = false;
+
+  if(wishCtrl && wishCtrl.destroy) wishCtrl.destroy();
+  wishCtrl = null;
+
+  cancelAnimationFrame(galaxyRaf);
+  cancelAnimationFrame(STATE.constellationRaf);
+  cancelAnimationFrame(STATE.activeTransformRaf);
+  cancelAnimationFrame(STATE.finalRaf);
+
+  TypingEngine.destroy();
+
+  revokeAll();
+
+  STATE.memories = [];
+  STATE.objectUrls = new Set();
+  STATE.secretClicks = 0;
+  transformedMap.clear();
+  STATE.enteredPin = "";
+  STATE.revealedAboutCrush = [];
+  STATE.discoveredSecrets = [];
+  STATE.featuredMemoryId = null;
+  STATE.memoryMoods = {};
+  STATE.memoryCaptions = {};
+  STATE.emotionChoice = null;
+  STATE.confessionStep = 0;
+  STATE.constellationProgress = 0;
+  STATE.timeCapsuleOpened = false;
+  STATE.voiceMessagePlayed = false;
+  STATE.pendingFiles = 0;
+  STATE.secretPositions = [];
+  transformedMap.clear();
+  memStars = [];
+
+  document.body.classList.remove("mood-warm","mood-cool");
+  bgSpeed = 1;
+  AudioManager.reset();
+  updatePinDisplay();
+
+  const resetIds = [
+    "preQText","preQText2","qReply","aboutRevealText","memPre1","memPre2","memPre3",
+    "featText1","featCap","capsuleMsg","fc1","fc2","fc3"
+  ];
+
+  resetIds.forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.classList.remove("show");
+  });
+
+  document.getElementById("preQText2").style.display = "none";
+  document.getElementById("btnHearQuestion").style.opacity = 0;
+  document.getElementById("btnOneLastThing").style.opacity = 0;
+  document.getElementById("btnOneLastThing").style.pointerEvents = "none";
+  document.getElementById("oneLastThingStar").classList.remove("show");
+
+  document.getElementById("btnAnsYes").disabled = false;
+  document.getElementById("btnAnsNo").disabled = false;
+  document.querySelectorAll(".resp-btn").forEach(btn => btn.disabled = false);
+
+  const resetUploadBtn = document.getElementById("btnToUpload");
+  resetUploadBtn.style.opacity = "0";
+  resetUploadBtn.style.pointerEvents = "none";
+  resetUploadBtn.disabled = false;
+
+  document.getElementById("btnToMeta").disabled = true;
+  document.getElementById("btnToMeta").textContent = "Tiếp theo →";
+  document.getElementById("fileInput").value = "";
+
+  document.getElementById("metaList").innerHTML = "";
+  document.getElementById("gallery").innerHTML = "";
+  document.getElementById("capsuleMsg").textContent = "";
+  capsule.classList.remove("opened");
+  document.getElementById("btnToLetter").style.opacity = 0;
+  document.getElementById("btnToLetter").style.pointerEvents = "none";
+
+  document.getElementById("featImg").src = "";
+  document.getElementById("featImg").style.opacity = 0;
+  document.getElementById("featImg").style.transform = "scale(0.8)";
+  document.getElementById("featCap").textContent = "";
+  document.getElementById("btnFeatTransform").style.opacity = 0;
+
+  document.getElementById("btnToVoice").style.display = "none";
+  document.getElementById("letterBox").textContent = "";
+
+  document.getElementById("btnFinalExplode").style.opacity = 0;
+
+  const tfCanvas = document.getElementById("tf-canvas");
+  tfCanvas.getContext("2d").clearRect(0,0,tfCanvas.width,tfCanvas.height);
+  const galaxyCanvas = document.getElementById("galaxyCanvas");
+  galaxyCanvas.getContext("2d").clearRect(0,0,galaxyCanvas.width,galaxyCanvas.height);
+  const constellationCanvas = document.getElementById("constellation-canvas");
+  constellationCanvas.getContext("2d").clearRect(0,0,constellationCanvas.width,constellationCanvas.height);
+  const fxCanvas = document.getElementById("fxCanvas");
+  fxCanvas.getContext("2d").clearRect(0,0,fxCanvas.width,fxCanvas.height);
+
+  closeQRCode();
+  document.getElementById("modalConfirm").classList.remove("open");
+  document.getElementById("modalSecret").classList.remove("open");
+  document.getElementById("modalSecretBody").innerHTML = "";
+  settingsBody.classList.remove("open");
+
+  goTo("landing", null, { force: true });
+}
+document.getElementById("btnReplay").onclick = resetExperience;
+document.getElementById("btnReplay2").onclick = resetExperience;
+
+})();
+</script>
+</body>
+</html>
